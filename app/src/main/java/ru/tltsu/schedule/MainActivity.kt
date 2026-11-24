@@ -192,7 +192,7 @@ class MainActivity:Activity(){
         val nav=row();nav.addView(button("‹"){move(selected.minusWeeks(1))});nav.addView(label(w.format(DateTimeFormatter.ofPattern("d MMM",ru))+" — "+w.plusDays(6).format(DateTimeFormatter.ofPattern("d MMM",ru)),17f,Color.WHITE,true).apply{gravity=Gravity.CENTER},LinearLayout.LayoutParams(0,-2,1f));nav.addView(button("›"){move(selected.plusWeeks(1))});root.addView(nav)
         val days=row()
         for(j in 0..6){
-            val d=w.plusDays(j.toLong());val item=col().apply{gravity=Gravity.CENTER;setPadding(0,dp(5),0,dp(5));background=rounded(if(d==selected)Color.parseColor("#315DA8") else Color.TRANSPARENT,10);setOnClickListener{selected=d;allWeek=false;render()}}
+            val d=w.plusDays(j.toLong());val item=col().apply{gravity=Gravity.CENTER;setPadding(0,dp(5),0,dp(5));background=rounded(if(!allWeek && d==selected)Color.parseColor("#315DA8") else Color.TRANSPARENT,10);setOnClickListener{selected=d;allWeek=false;render()}}
             item.addView(label(listOf("Пн","Вт","Ср","Чт","Пт","Сб","Вс")[j],11f,muted).apply{gravity=Gravity.CENTER});item.addView(label(d.dayOfMonth.toString(),16f,Color.WHITE,true).apply{gravity=Gravity.CENTER});item.addView(label(if(lessons.any{it.date==d})"●" else " ",8f,accent).apply{gravity=Gravity.CENTER})
             days.addView(item,LinearLayout.LayoutParams(0,-2,1f).apply{setMargins(dp(2),0,dp(2),0)})
         }
