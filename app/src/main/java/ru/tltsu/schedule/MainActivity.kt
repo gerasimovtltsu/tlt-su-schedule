@@ -83,7 +83,11 @@ private fun alarms(c:Context){
     p.edit().putStringSet("alarm_ids",desired.keys.toSet()).apply()
 }
 private fun channel(c:Context){
-    c.getSystemService(NotificationManager::class.java).createNotificationChannel(NotificationChannel("lessons","Напоминания о парах",NotificationManager.IMPORTANCE_HIGH))
+    val ch=NotificationChannel("lessons_v2","Напоминания о парах",NotificationManager.IMPORTANCE_HIGH).apply {
+        enableVibration(true)
+        vibrationPattern=longArrayOf(0,250,150,250)
+    }
+    c.getSystemService(NotificationManager::class.java).createNotificationChannel(ch)
 }
 class ReminderReceiver:BroadcastReceiver(){
     override fun onReceive(c:Context,i:Intent){
@@ -91,7 +95,7 @@ class ReminderReceiver:BroadcastReceiver(){
         if(Build.VERSION.SDK_INT>=33 && c.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)return
         channel(c)
         val open=PendingIntent.getActivity(c,0,Intent(c,MainActivity::class.java),PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val n=Notification.Builder(c,"lessons").setSmallIcon(R.drawable.ic_notification).setContentTitle("Скоро пара: "+i.getStringExtra("name")).setContentText(i.getStringExtra("detail")).setStyle(Notification.BigTextStyle().bigText(i.getStringExtra("detail"))).setContentIntent(open).setAutoCancel(true).build()
+        val n=Notification.Builder(c,"lessons_v2").setSmallIcon(R.drawable.ic_notification).setContentTitle("Скоро пара: "+i.getStringExtra("name")).setContentText(i.getStringExtra("detail")).setStyle(Notification.BigTextStyle().bigText(i.getStringExtra("detail"))).setContentIntent(open).setAutoCancel(true).build()
         c.getSystemService(NotificationManager::class.java).notify(i.data.toString().hashCode(),n)
     }
 }
