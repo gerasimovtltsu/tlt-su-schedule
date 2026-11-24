@@ -29,6 +29,10 @@ private val dayFmt = DateTimeFormatter.ofPattern("d MMMM, EEEE",ru)
 private fun today() = LocalDate.now(zone)
 private fun week(d:LocalDate) = d.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
 private fun prefs(c:Context) = c.getSharedPreferences("schedule",0)
+private fun teacher(c:Context)=prefs(c).getInt("teacher_id",15943)
+private fun cacheKey(id:Int,w:LocalDate)=if(id==15943)"week_$w" else "week_${id}_$w"
+private fun updateKey(id:Int,w:LocalDate)=if(id==15943)"updated_$w" else "updated_${id}_$w"
+private fun teacherName(c:Context)=prefs(c).getString("teacher_name_"+teacher(c),null) ?: "Преподаватель №"+teacher(c)
 private val executor = Executors.newSingleThreadExecutor()
 data class Lesson(val id:String,val name:String,val type:String,val number:Int,val date:LocalDate,val start:LocalTime,val end:LocalTime,val room:String,val groups:String,val note:String) {
     fun begins() = date.atTime(start).atZone(zone).toInstant().toEpochMilli()
@@ -44,11 +48,12 @@ private fun parse(raw:String):List<Lesson> {
         Lesson(x.getString("id"),x.optString("disciplineName"),when(val t=x.optString("type")){"Лек"->"Лекция";"Лаб"->"Лабораторная";"ПрЗ"->"Практика";else->t},x.optInt("pairNumber"),LocalDate.parse(x.getString("date").replace('.','-')),LocalTime.parse(x.getString("fromTime").substring(11,16)),LocalTime.parse(x.getString("toTime").substring(11,16)),room?.optString("number").orEmpty().ifBlank{room?.optString("name").orEmpty()},(0 until g.length()).map{g.getJSONObject(it).optString("name")}.joinToString(", "),listOf("subgroup","note").filter{!x.isNull(it)}.map{x.optString(it).trim()}.filter{it.isNotBlank()}.joinToString(" · "))
     }.sortedWith(compareBy({it.date},{it.start}))
 }
-private fun cached(c:Context,w:LocalDate)=runCatching{parse(prefs(c).getString("week_$w","[]")!!)}.getOrDefault(emptyList())
+private fun cached(c:Context,w:LocalDate)=runCatching{parse(prefs(c).getString(cacheKey(teacher(c),w),"[]")!!)}.getOrDefault(emptyList())
 private fun fetch(c:Context,w:LocalDate):List<Lesson>{
+    val tid=teacher(c)
     val from=fmt.format(w.atStartOfDay(zone).toInstant())
     val to=fmt.format(w.plusWeeks(1).atStartOfDay(zone).toInstant().minusMillis(1))
-    val u=URL("https://its.tltsu.ru/api/schedule/teacher?teacherId=15943&fromDate=$from&toDate=$to")
+    val u=URL("https://its.tltsu.ru/api/schedule/teacher?teacherId=$tid&fromDate=$from&toDate=$to")
     val conn=u.openConnection() as HttpURLConnection
     conn.connectTimeout=12000;conn.readTimeout=15000
     conn.setRequestProperty("Accept","application/json")
@@ -56,7 +61,13 @@ private fun fetch(c:Context,w:LocalDate):List<Lesson>{
         check(conn.responseCode==200){"HTTP "+conn.responseCode}
         val raw=conn.inputStream.bufferedReader().use{it.readText()}
         val lessons=parse(raw)
-        prefs(c).edit().putString("week_$w",raw).putLong("updated_$w",System.currentTimeMillis()).apply()
+        val edit=prefs(c).edit().putString(cacheKey(tid,w),raw).putLong(updateKey(tid,w),System.currentTimeMillis())
+        val t=JSONArray(raw).optJSONObject(0)?.optJSONObject("teacher")
+        if(t!=null && t.optInt("id")==tid){
+            val name=listOf("lastName","name","patronymic").map{t.optString(it)}.filter{it.isNotBlank() && it!="null"}.joinToString(" ")
+            if(name.isNotBlank())edit.putString("teacher_name_$tid",name)
+        }
+        edit.apply()
         return lessons
     } finally {conn.disconnect()}
 }
@@ -173,19 +184,43 @@ class MainActivity:Activity(){
         if(loading)return
         loading=true;render()
         val w=week(selected)
+        val tid=teacher(this)
         executor.execute{
             val result=runCatching{fetch(this,w)}
             if(both){for(other in listOf(week(today()),week(today()).plusWeeks(1)).filter{it!=w})runCatching{fetch(this,other)}}
             alarms(this)
-            runOnUiThread{if(!isDestroyed){loading=false;syncError=result.isFailure;render();if(week(selected)!=w && !prefs(this).contains("week_"+week(selected)))refresh()}}
+            runOnUiThread{if(!isDestroyed){loading=false;syncError=result.isFailure;render();if(teacher(this)!=tid)refresh(true) else if(week(selected)!=w && !prefs(this).contains(cacheKey(teacher(this),week(selected))))refresh()}}
         }
     }
-    private fun move(d:LocalDate){selected=d;render();if(!prefs(this).contains("week_"+week(d)))refresh()}
+    private fun move(d:LocalDate){selected=d;render();if(!prefs(this).contains(cacheKey(teacher(this),week(d))))refresh()}
+    private fun chooseTeacher(){
+        val input=EditText(this).apply{inputType=android.text.InputType.TYPE_CLASS_TEXT;hint="ID или ссылка на расписание";setText(teacher(this@MainActivity).toString());selectAll()}
+        val dialog=AlertDialog.Builder(this).setTitle("Преподаватель").setMessage("Введите числовой ID или ссылку rasp.tltsu.ru/teacher/…").setView(input).setPositiveButton("Сохранить",null).setNegativeButton("Отмена",null).create()
+        dialog.setOnShowListener{dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener{
+            val raw=input.text.toString().trim()
+            val uri=Uri.parse(raw)
+            val id=raw.toIntOrNull() ?: if(uri.host=="rasp.tltsu.ru" && uri.pathSegments.firstOrNull()=="teacher")uri.pathSegments.getOrNull(1)?.toIntOrNull() else null
+            if(id==null || id<=0){input.error="Введите корректный ID преподавателя";return@setOnClickListener}
+            if(id!=teacher(this)){
+                val manager=getSystemService(AlarmManager::class.java)
+                val p=prefs(this)
+                for(old in p.getStringSet("alarm_ids",emptySet())!!.toSet()){
+                    val intent=Intent(this,ReminderReceiver::class.java).setData(Uri.parse("schedule://reminder/"+old))
+                    PendingIntent.getBroadcast(this,0,intent,PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE)?.let{manager.cancel(it);it.cancel()}
+                }
+                p.edit().putInt("teacher_id",id).remove("alarm_ids").apply()
+                getSystemService(NotificationManager::class.java).cancelAll()
+                selected=today();allWeek=false;syncError=false;alarms(this);render();refresh(true)
+            }
+            dialog.dismiss()
+        }}
+        dialog.show()
+    }
     private fun settings(){
         val exact=Build.VERSION.SDK_INT<31||getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
         val lead=prefs(this).getInt("lead",15)
         val enabled=getSystemService(NotificationManager::class.java).areNotificationsEnabled()
-        val options=arrayOf("За $lead мин. · изменить","Тестовое уведомление","Точные будильники · "+if(exact)"разрешены" else "не разрешены","Уведомления · "+if(enabled)"включены" else "выключены","Настройки приложения","Тест будильника через 30 секунд")
+        val options=arrayOf("За $lead мин. · изменить","Тестовое уведомление","Точные будильники · "+if(exact)"разрешены" else "не разрешены","Уведомления · "+if(enabled)"включены" else "выключены","Настройки приложения","Тест будильника через 30 секунд","Преподаватель · "+teacherName(this))
         AlertDialog.Builder(this).setTitle("Напоминания").setItems(options){_,idx->
             when(idx){
                 0->{val values=intArrayOf(5,10,15,20,30);AlertDialog.Builder(this).setTitle("Напоминать до пары").setSingleChoiceItems(values.map{"$it мин."}.toTypedArray(),values.indexOf(lead)){dialog,which->prefs(this).edit().putInt("lead",values[which]).apply();alarms(this);dialog.dismiss()}.setNegativeButton("Отмена",null).show()}
@@ -193,6 +228,7 @@ class MainActivity:Activity(){
                 2->{if(Build.VERSION.SDK_INT>=31)runCatching{startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,Uri.parse("package:"+packageName)))}}
                 3->startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,packageName))
                 4->startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+packageName)))
+                6->chooseTeacher()
                 5->{
                     val am=getSystemService(AlarmManager::class.java)
                     if(Build.VERSION.SDK_INT>=31 && !am.canScheduleExactAlarms()){Toast.makeText(this,"Разрешите точные будильники",Toast.LENGTH_LONG).show();return@setItems}
@@ -209,8 +245,9 @@ class MainActivity:Activity(){
         val w=week(selected);val lessons=cached(this,w)
         root.removeAllViews()
         val top=row();top.addView(label("Расписание ТГУ",21f,Color.WHITE,true),LinearLayout.LayoutParams(0,-2,1f));top.addView(iconButton(android.R.drawable.ic_popup_sync,"Обновить"){refresh(true)});top.addView(iconButton(android.R.drawable.ic_menu_preferences,"Настройки"){settings()});root.addView(top)
-        val updated=prefs(this).getLong("updated_$w",0)
+        val updated=prefs(this).getLong(updateKey(teacher(this),w),0)
         status=label(if(loading)"Обновление…" else if(syncError)"Нет связи · сохранённые данные" else if(updated>0)"Обновлено "+Instant.ofEpochMilli(updated).atZone(zone).format(DateTimeFormatter.ofPattern("HH:mm")) else "Нет загруженных данных",11f,muted)
+        root.addView(label(teacherName(this),12f,accent).apply{setOnClickListener{chooseTeacher()}})
         root.addView(status)
         val nav=row();nav.addView(button("‹"){move(selected.minusWeeks(1))});nav.addView(label(w.format(DateTimeFormatter.ofPattern("d MMM",ru))+" — "+w.plusDays(6).format(DateTimeFormatter.ofPattern("d MMM",ru)),17f,Color.WHITE,true).apply{gravity=Gravity.CENTER},LinearLayout.LayoutParams(0,-2,1f));nav.addView(button("›"){move(selected.plusWeeks(1))});root.addView(nav)
         val days=row()
@@ -233,7 +270,7 @@ class MainActivity:Activity(){
         for(d in dates){
             val day=lessons.filter{it.date==d}
             content.addView(label(d.format(dayFmt).replaceFirstChar{it.uppercase(ru)}+" · "+day.size+" пар",17f,Color.WHITE,true));content.addGap(8)
-            if(day.isEmpty()){content.addView(label(if(prefs(this).contains("week_$w"))"Занятий нет" else "Расписание не загружено",15f,muted));content.addGap(16)}
+            if(day.isEmpty()){content.addView(label(if(prefs(this).contains(cacheKey(teacher(this),w)))"Занятий нет" else "Расписание не загружено",15f,muted));content.addGap(16)}
             for(l in day){
                 val line=row().apply{gravity=Gravity.TOP}
                 val times=col();times.addView(label(l.start.toString(),15f,Color.WHITE,true));times.addView(label(l.end.toString(),12f,muted))
