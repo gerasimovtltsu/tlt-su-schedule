@@ -32,9 +32,11 @@
 
 ## Установка
 
-1. Откройте [GitHub Actions](https://github.com/gerasimovtltsu/tlt-su-schedule/actions).
-2. Выберите последнюю успешную сборку **Build Android APK**.
-3. Скачайте артефакт **ScheduleTGU**, распакуйте архив и установите ScheduleTGU.apk.
+1. Откройте [последний релиз](https://github.com/gerasimovtltsu/tlt-su-schedule/releases/latest).
+2. В разделе **Assets** скачайте `ScheduleTGU.apk`.
+3. Откройте файл на Android и установите приложение.
+
+APK автоматически публикуется в [Releases](https://github.com/gerasimovtltsu/tlt-su-schedule/releases) после успешной сборки основной ветки. Изменения документации не запускают сборку. ZIP-артефакт также доступен в [GitHub Actions](https://github.com/gerasimovtltsu/tlt-su-schedule/actions).
 
 Репозиторий приватный: для загрузки требуется доступ к нему и вход в GitHub. APK имеет отладочную подпись; обновление поверх старой версии возможно только при совпадении подписи.
 
