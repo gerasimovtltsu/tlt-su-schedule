@@ -6,6 +6,10 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.widget.ImageButton
+import android.view.View
+import android.content.res.ColorStateList
+import android.graphics.drawable.RippleDrawable
+import ru.tltsu.schedule.R
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -40,6 +44,9 @@ internal class ScheduleScreen(
     private val muted = Color.parseColor("#B4C1D4")
     private val accent = Color.parseColor("#8EB5FF")
 
+    private var previousKey: String? = null
+    private var previousScroll: ScrollView? = null
+
     init {
         root.setBackgroundColor(bg)
         root.setPadding(dp(14), dp(5), dp(14), dp(4))
@@ -50,32 +57,47 @@ internal class ScheduleScreen(
         val id = teacher(context)
         val lessons = ScheduleRepository.cached(context, monday, id)
         val now = System.currentTimeMillis()
+        val key = "$id/${state.date}/${state.allWeek}"
+        val scrollY = if (key == previousKey) previousScroll?.scrollY ?: 0 else 0
+        previousKey = key
         root.removeAllViews()
         renderHeader(state, monday, id)
         renderCalendar(state, monday, lessons)
         val content = column()
-        val scroll = ScrollView(context).apply { addView(content) }
+        val scroll = ScrollView(context).apply {
+            isFillViewport = true
+            isVerticalScrollBarEnabled = false
+            addView(content)
+        }
+        previousScroll = scroll
+        scroll.post { scroll.scrollTo(0, scrollY) }
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
 
-        val next = ScheduleRepository.upcoming(context).firstOrNull { it.ends() > now }
-        if (next != null) {
+        val next = ScheduleRepository.upcoming(context).filter { it.ends() > now }.minByOrNull { it.begins() }
+        if (next != null && (state.date == today() || (state.allWeek && monday == week(today())))) {
             content.addView(nextCard(next, now))
-            content.gap(10)
+            content.gap(16)
         }
 
         val dates = if (state.allWeek) (0..6).map { monday.plusDays(it.toLong()) } else listOf(state.date)
         for (date in dates) {
-            val day = lessons.filter { it.date == date }
-            content.addView(label(date.format(dayFmt).replaceFirstChar { it.uppercase(ru) } + " · " + day.size + " пар", 17f, Color.WHITE, true))
+            val day = lessons.filter { it.date == date }.sortedBy { it.start }
+            content.addView(label(date.format(dayFmt).replaceFirstChar { it.uppercase(ru) } + " · " + lessonCount(day.size), 17f, Color.WHITE, true))
             content.gap(8)
             if (day.isEmpty()) {
                 val message = if (ScheduleCache.exists(context, id, monday)) "Занятий нет" else "Расписание не загружено"
-                content.addView(label(message, 15f, muted))
+                content.addView(column().apply {
+                    background = rounded(surface, 14)
+                    setPadding(dp(16), dp(20), dp(16), dp(20))
+                    addView(label(message, 16f, Color.WHITE, true))
+                    gap(5)
+                    addView(label(if (state.loading) "Получаем данные…" else if (ScheduleCache.exists(context, id, monday)) "На этот день пары не запланированы" else "Нажмите кнопку обновления", 13f, muted))
+                })
                 content.gap(16)
             }
             for (lesson in day) {
                 content.addView(lessonCard(lesson, now))
-                content.gap(6)
+                content.gap(10)
             }
             content.gap(8)
         }
@@ -84,25 +106,36 @@ internal class ScheduleScreen(
 
     private fun renderHeader(state: ScheduleState, monday: LocalDate, id: Int) {
         val top = row()
-        top.addView(label("Расписание ТГУ", 21f, Color.WHITE, true), weight())
-        top.addView(iconButton(android.R.drawable.ic_popup_sync, "Обновить", onRefresh))
-        top.addView(iconButton(android.R.drawable.ic_menu_preferences, "Настройки", onSettings))
+        top.addView(label("Расписание ТГУ", 23f, Color.WHITE, true), weight())
+        top.addView(iconButton(R.drawable.ic_refresh_modern, "Обновить", onRefresh))
+        top.addView(iconButton(R.drawable.ic_settings_modern, "Настройки", onSettings))
         root.addView(top)
-        root.addView(label(teacherName(context), 12f, accent).apply { setOnClickListener { onTeacher() } })
+        root.addView(label(teacherName(context) + "  ▾", 14f, accent, true).apply {
+            minHeight = dp(36)
+            gravity = Gravity.CENTER_VERTICAL
+            background = ripple(Color.TRANSPARENT, 8)
+            contentDescription = "Выбрать преподавателя: " + teacherName(context)
+            setOnClickListener { onTeacher() }
+        })
         val updated = ScheduleCache.updatedAt(context, id, monday)
         val status = when {
             state.loading -> "Обновление…"
             state.syncError -> "Нет связи · сохранённые данные"
-            updated > 0 -> "Обновлено " + Instant.ofEpochMilli(updated).atZone(zone).format(DateTimeFormatter.ofPattern("HH:mm"))
+            updated > 0 -> {
+                val stamp = Instant.ofEpochMilli(updated).atZone(zone)
+                "Обновлено " + stamp.format(DateTimeFormatter.ofPattern(if (stamp.toLocalDate() == today()) "HH:mm" else "dd.MM HH:mm"))
+            }
             else -> "Нет загруженных данных"
         }
-        root.addView(label(status, 11f, muted))
+        root.addView(label(status, 12f, if (state.syncError) Color.parseColor("#F2C581") else muted))
+        root.gap(10)
         val nav = row()
         val format = DateTimeFormatter.ofPattern("d MMM", ru)
-        nav.addView(button("‹") { onDate(state.date.minusWeeks(1), false) })
+        nav.addView(iconButton(R.drawable.ic_chevron_left, "Предыдущая неделя") { onDate(state.date.minusWeeks(1), false) })
         nav.addView(label(monday.format(format) + " — " + monday.plusDays(6).format(format), 17f, Color.WHITE, true).apply { gravity = Gravity.CENTER }, weight())
-        nav.addView(button("›") { onDate(state.date.plusWeeks(1), false) })
+        nav.addView(iconButton(R.drawable.ic_chevron_right, "Следующая неделя") { onDate(state.date.plusWeeks(1), false) })
         root.addView(nav)
+        root.gap(6)
     }
 
     private fun renderCalendar(state: ScheduleState, monday: LocalDate, lessons: List<Lesson>) {
@@ -110,62 +143,90 @@ internal class ScheduleScreen(
         val names = listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
         for (index in names.indices) {
             val date = monday.plusDays(index.toLong())
+            val selected = !state.allWeek && date == state.date
+            val isToday = date == today()
+            val count = lessons.count { it.date == date }
             val item = column().apply {
                 gravity = Gravity.CENTER
                 setPadding(0, dp(5), 0, dp(5))
-                background = rounded(if (!state.allWeek && date == state.date) Color.parseColor("#315DA8") else Color.TRANSPARENT, 10)
+                minimumHeight = dp(60)
+                background = ripple(if (selected) Color.parseColor("#315DA8") else surface, 10, if (isToday) accent else null)
+                isSelected = selected
+                contentDescription = date.format(dayFmt) + ", " + lessonCount(count) + if (isToday) ", сегодня" else ""
                 setOnClickListener { onDate(date, true) }
             }
-            item.addView(label(names[index], 11f, muted).apply { gravity = Gravity.CENTER })
+            item.addView(label(names[index], 12f, if (selected) Color.WHITE else muted).apply { gravity = Gravity.CENTER })
             item.addView(label(date.dayOfMonth.toString(), 16f, Color.WHITE, true).apply { gravity = Gravity.CENTER })
-            item.addView(label(if (lessons.any { it.date == date }) "●" else " ", 8f, accent).apply { gravity = Gravity.CENTER })
+            item.addView(label(if (count > 0) count.toString() else "–", 11f, if (selected) Color.WHITE else accent).apply { gravity = Gravity.CENTER })
             days.addView(item, weight().apply { setMargins(dp(2), 0, dp(2), 0) })
         }
         root.addView(days)
-        root.gap(8)
+        root.gap(14)
     }
 
     private fun nextCard(lesson: Lesson, now: Long): LinearLayout {
         val banner = column().apply {
             background = rounded(Color.parseColor("#233A5C"))
-            setPadding(dp(11), dp(8), dp(11), dp(8))
+            setPadding(dp(14), dp(12), dp(14), dp(12))
         }
         val title = when {
             lesson.begins() <= now -> "Сейчас идёт пара"
-            lesson.date == today() -> "Через " + ((lesson.begins() - now + 59_999) / 60_000) + " мин."
+            lesson.date == today() -> "Через " + duration((lesson.begins() - now + 59_999) / 60_000)
             lesson.date == today().plusDays(1) -> "Завтра в " + lesson.start
             else -> lesson.date.format(dayFmt) + " · " + lesson.start
         }
-        banner.addView(label(title, 13f, accent, true))
+        banner.addView(label(if (lesson.begins() <= now) "СЕЙЧАС" else "БЛИЖАЙШАЯ ПАРА", 11f, accent, true))
+        banner.gap(4)
+        banner.addView(label(title, 18f, Color.WHITE, true))
         banner.gap(2)
-        banner.addView(label(lesson.name, 15f, Color.WHITE, true))
+        banner.addView(label(lesson.name, 16f, Color.WHITE, true))
         banner.gap(2)
-        banner.addView(label(lesson.type + " · " + lesson.room + " · " + lesson.time(), 12f, muted))
+        banner.addView(label(lesson.room + "  ·  " + lesson.time() + "  ·  " + lesson.type, 13f, muted))
         return banner
     }
 
     private fun lessonCard(lesson: Lesson, now: Long): LinearLayout {
-        val line = row().apply { gravity = Gravity.TOP }
-        val times = column()
-        times.addView(label(lesson.start.toString(), 15f, Color.WHITE, true))
-        times.addView(label(lesson.end.toString(), 12f, muted))
-        line.addView(times, LinearLayout.LayoutParams(dp(54), -2))
-        val card = column().apply {
-            background = rounded(surface, 10)
-            setPadding(dp(10), dp(7), dp(10), dp(7))
-        }
+        val active = lesson.begins() <= now && lesson.ends() > now
+        val past = lesson.ends() <= now
         val typeColor = when (lesson.type) {
             "Лекция" -> accent
             "Лабораторная" -> Color.parseColor("#72D9BA")
             else -> Color.parseColor("#F2C581")
         }
-        card.addView(label(lesson.name, 15f, Color.WHITE, true))
-        card.gap(2)
-        card.addView(label(lesson.type + " · " + lesson.room, 12f, typeColor, true))
-        card.gap(2)
-        card.addView(label(lesson.groups, 12f, muted))
-        if (lesson.note.isNotBlank()) card.addView(label(lesson.note, 11f, muted))
-        if (lesson.ends() < now) line.alpha = 0.68f
+        val line = row().apply { gravity = Gravity.TOP }
+        val times = column().apply { setPadding(0, dp(11), 0, 0) }
+        times.addView(label(lesson.start.toString(), 16f, Color.WHITE, true))
+        times.gap(3)
+        times.addView(label(lesson.end.toString(), 13f, muted))
+        line.addView(times, LinearLayout.LayoutParams(dp(57), -2))
+        val card = row().apply {
+            gravity = Gravity.CENTER_VERTICAL
+            background = rounded(if (active) Color.parseColor("#233A5C") else surface, 14).apply {
+                if (active) setStroke(dp(1), accent)
+            }
+            setPadding(dp(9), dp(11), dp(12), dp(11))
+        }
+        card.addView(View(context).apply { background = rounded(typeColor, 3) }, LinearLayout.LayoutParams(dp(3), dp(44)).apply { marginEnd = dp(10) })
+        val details = column()
+        if (active) {
+            details.addView(label("ИДЁТ СЕЙЧАС", 11f, accent, true))
+            details.gap(4)
+        }
+        details.addView(label(lesson.name, 16f, Color.WHITE, true).apply { setLineSpacing(dp(2).toFloat(), 1f) })
+        details.gap(6)
+        details.addView(label(lesson.room.ifBlank { "Аудитория не указана" }, 15f, Color.WHITE, true))
+        details.gap(4)
+        details.addView(label(lesson.type, 13f, typeColor, true))
+        if (lesson.groups.isNotBlank()) {
+            details.gap(3)
+            details.addView(label(lesson.groups, 13f, muted))
+        }
+        if (lesson.note.isNotBlank()) {
+            details.gap(4)
+            details.addView(label(lesson.note, 12f, muted))
+        }
+        card.addView(details, weight())
+        if (past) line.alpha = 0.78f
         line.addView(card, weight())
         return line
     }
@@ -175,19 +236,19 @@ internal class ScheduleScreen(
             setPadding(0, dp(8), 0, dp(6))
         }
         bottom.addView(
-            navigationButton("Сегодня", !state.allWeek && state.date == today()) {
+            navigationButton("Сегодня", R.drawable.ic_calendar_day, !state.allWeek && state.date == today()) {
                 onDate(today(), true)
             },
             weight().apply { marginEnd = dp(5) }
         )
         bottom.addView(
-            navigationButton("Неделя", state.allWeek, onToggleWeek),
+            navigationButton("Неделя", R.drawable.ic_calendar_week, state.allWeek, onToggleWeek),
             weight().apply { marginStart = dp(5) }
         )
         root.addView(bottom)
     }
 
-    private fun navigationButton(value: String, active: Boolean, action: () -> Unit) =
+    private fun navigationButton(value: String, icon: Int, active: Boolean, action: () -> Unit) =
         android.widget.Button(context).apply {
             text = value
             textSize = 15f
@@ -195,6 +256,11 @@ internal class ScheduleScreen(
             isSelected = active
             setTypeface(null, Typeface.BOLD)
             setTextColor(if (active) Color.WHITE else accent)
+            val glyph = context.getDrawable(icon)?.mutate()
+            glyph?.setTint(if (active) Color.WHITE else accent)
+            glyph?.setBounds(0, 0, dp(20), dp(20))
+            setCompoundDrawablesRelative(glyph, null, null, null)
+            compoundDrawablePadding = dp(6)
             minHeight = dp(48)
             minimumHeight = dp(48)
             setPadding(dp(12), dp(10), dp(12), dp(10))
@@ -210,6 +276,27 @@ internal class ScheduleScreen(
             )
             setOnClickListener { action() }
         }
+
+    private fun ripple(color: Int, radius: Int, stroke: Int? = null) =
+        RippleDrawable(ColorStateList.valueOf(0x33FFFFFF), rounded(color, radius).apply {
+            if (stroke != null) setStroke(dp(1), stroke)
+        }, rounded(Color.WHITE, radius))
+
+    private fun lessonCount(n: Int): String {
+        val word = when {
+            n % 100 in 11..14 -> "пар"
+            n % 10 == 1 -> "пара"
+            n % 10 in 2..4 -> "пары"
+            else -> "пар"
+        }
+        return "$n $word"
+    }
+
+    private fun duration(minutes: Long): String {
+        val h = minutes / 60
+        val m = minutes % 60
+        return if (h == 0L) "$m мин." else if (m == 0L) "$h ч" else "$h ч $m мин."
+    }
 
     private fun dp(value: Int): Int = (value * context.resources.displayMetrics.density).toInt()
     private fun weight() = LinearLayout.LayoutParams(0, -2, 1f)
@@ -237,11 +324,11 @@ internal class ScheduleScreen(
     private fun iconButton(resource: Int, description: String, action: () -> Unit) = ImageButton(context).apply {
         setImageResource(resource)
         setColorFilter(accent)
-        setBackgroundColor(Color.TRANSPARENT)
+        background = ripple(surface, 12)
         contentDescription = description
         setPadding(dp(11), dp(11), dp(11), dp(11))
         scaleType = ImageView.ScaleType.FIT_CENTER
-        layoutParams = LinearLayout.LayoutParams(dp(46), dp(46))
+        layoutParams = LinearLayout.LayoutParams(dp(48), dp(48))
         setOnClickListener { action() }
     }
     private fun LinearLayout.gap(value: Int) {
