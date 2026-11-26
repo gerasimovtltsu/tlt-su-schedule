@@ -50,7 +50,16 @@ class MainActivity : ComponentActivity() {
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         if (savedInstanceState == null) model.refresh(true)
-        UpdateManager.check(this)
+        UpdateManager.check(this, intent.getBooleanExtra("check_update", false))
+    }
+
+    @Deprecated("Legacy activity result used for settings navigation")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == 208 && resultCode == RESULT_OK) {
+            val id = data?.getIntExtra("teacher_id", -1) ?: -1
+            if (id > 0) model.changeTeacher(id)
+        }
     }
 
     override fun onResume() {

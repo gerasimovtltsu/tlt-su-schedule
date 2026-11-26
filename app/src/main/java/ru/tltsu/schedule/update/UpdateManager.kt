@@ -90,8 +90,7 @@ internal object UpdateManager {
             .setTitle("Доступно обновление")
             .setMessage("Установлено: " + installed(activity) + "\nНовая версия: " + release.version + "\n\nЧто нового:\n" + notes)
             .setPositiveButton("Скачать APK") { _, _ ->
-                runCatching { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(release.downloadUrl))) }
-                    .onFailure { Toast.makeText(activity, "Не удалось открыть ссылку", Toast.LENGTH_LONG).show() }
+                ApkDownloader.start(activity, release)
             }
             .setNeutralButton("GitHub") { _, _ ->
                 runCatching { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(GitHubReleaseApi.RELEASES))) }
@@ -107,7 +106,7 @@ internal object UpdateManager {
         if (!manager.areNotificationsEnabled()) return
         manager.createNotificationChannel(NotificationChannel(CHANNEL, "Обновления приложения", NotificationManager.IMPORTANCE_DEFAULT))
         if (manager.getNotificationChannel(CHANNEL)?.importance == NotificationManager.IMPORTANCE_NONE) return
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(release.downloadUrl))
+        val intent = Intent(context, ru.tltsu.schedule.MainActivity::class.java).putExtra("check_update", true)
         val pending = PendingIntent.getActivity(context, 1701, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val notification = Notification.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)

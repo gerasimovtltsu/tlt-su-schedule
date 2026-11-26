@@ -55,44 +55,10 @@ internal class SettingsDialogs(
     }
 
     fun show() {
-        val lead = prefs(activity).getInt("lead", 15)
-        val exact = ReminderScheduler.exactAllowed(activity)
-        val enabled = activity.getSystemService(NotificationManager::class.java).areNotificationsEnabled()
-        val options = arrayOf(
-            "За $lead мин. · изменить",
-            "Тестовое уведомление",
-            "Точные будильники · " + if (exact) "разрешены" else "не разрешены",
-            "Уведомления · " + if (enabled) "включены" else "выключены",
-            "Настройки приложения",
-            "Тест будильника через 30 секунд",
-            "Преподаватель · " + teacherName(activity),
-            "Диагностика напоминаний",
-            "Перепланировать напоминания",
-            "Проверить обновления · " + UpdateManager.installed(activity)
-        )
-        AlertDialog.Builder(activity).setTitle("Напоминания")
-            .setItems(options) { _, index ->
-                when (index) {
-                    0 -> chooseLead(lead)
-                    1 -> test(false)
-                    2 -> if (Build.VERSION.SDK_INT >= 31) {
-                        runCatching { activity.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, packageUri())) }
-                    } else Unit
-                    3 -> activity.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, activity.packageName))
-                    4 -> activity.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri()))
-                    5 -> test(true)
-                    6 -> chooseTeacher()
-                    7 -> DiagnosticsDialog.show(activity)
-                    9 -> UpdateManager.check(activity, manual = true)
-                    8 -> {
-                        ReminderScheduler.reschedule(activity)
-                        toast("Напоминания перепланированы")
-                    }
-                }
-            }.setNegativeButton("Закрыть", null).show()
+        activity.startActivityForResult(Intent(activity, SettingsActivity::class.java), 208)
     }
 
-    private fun chooseLead(lead: Int) {
+    fun chooseLead(lead: Int) {
         val values = intArrayOf(5, 10, 15, 20, 30)
         AlertDialog.Builder(activity).setTitle("Напоминать до пары")
             .setSingleChoiceItems(values.map { "$it мин." }.toTypedArray(), values.indexOf(lead)) { dialog, index ->
@@ -102,7 +68,7 @@ internal class SettingsDialogs(
             }.setNegativeButton("Отмена", null).show()
     }
 
-    private fun test(delayed: Boolean) {
+    fun test(delayed: Boolean) {
         if (Build.VERSION.SDK_INT >= 33 &&
             activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
