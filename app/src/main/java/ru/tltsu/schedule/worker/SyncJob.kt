@@ -7,6 +7,7 @@ import ru.tltsu.schedule.data.repository.ScheduleRepository
 import ru.tltsu.schedule.notification.ReminderScheduler
 import ru.tltsu.schedule.util.today
 import ru.tltsu.schedule.util.week
+import ru.tltsu.schedule.update.UpdateManager
 
 class SyncJob : JobService() {
     override fun onStartJob(params: JobParameters): Boolean {
@@ -18,6 +19,7 @@ class SyncJob : JobService() {
                 if (runCatching { ScheduleRepository.fetch(this, date, id) }.isFailure) success = false
             }
             ReminderScheduler.reschedule(this)
+            UpdateManager.checkInBackground(applicationContext)
             jobFinished(params, !success)
         }
         return true

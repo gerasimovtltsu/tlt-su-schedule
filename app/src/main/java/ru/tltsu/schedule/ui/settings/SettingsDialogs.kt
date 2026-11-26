@@ -16,6 +16,7 @@ import ru.tltsu.schedule.data.local.prefs
 import ru.tltsu.schedule.data.local.teacher
 import ru.tltsu.schedule.data.local.teacherName
 import ru.tltsu.schedule.notification.ReminderScheduler
+import ru.tltsu.schedule.update.UpdateManager
 
 internal class SettingsDialogs(
     private val activity: Activity,
@@ -66,7 +67,8 @@ internal class SettingsDialogs(
             "Тест будильника через 30 секунд",
             "Преподаватель · " + teacherName(activity),
             "Диагностика напоминаний",
-            "Перепланировать напоминания"
+            "Перепланировать напоминания",
+            "Проверить обновления · " + UpdateManager.installed(activity)
         )
         AlertDialog.Builder(activity).setTitle("Напоминания")
             .setItems(options) { _, index ->
@@ -81,6 +83,7 @@ internal class SettingsDialogs(
                     5 -> test(true)
                     6 -> chooseTeacher()
                     7 -> DiagnosticsDialog.show(activity)
+                    9 -> UpdateManager.check(activity, manual = true)
                     8 -> {
                         ReminderScheduler.reschedule(activity)
                         toast("Напоминания перепланированы")

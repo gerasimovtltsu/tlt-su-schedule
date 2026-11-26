@@ -17,6 +17,7 @@ import ru.tltsu.schedule.ui.schedule.ScheduleScreen
 import ru.tltsu.schedule.ui.schedule.ScheduleViewModel
 import ru.tltsu.schedule.ui.settings.SettingsDialogs
 import ru.tltsu.schedule.worker.ScheduleSync
+import ru.tltsu.schedule.update.UpdateManager
 
 class MainActivity : ComponentActivity() {
     private lateinit var model: ScheduleViewModel
@@ -49,6 +50,7 @@ class MainActivity : ComponentActivity() {
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
         if (savedInstanceState == null) model.refresh(true)
+        UpdateManager.check(this)
     }
 
     override fun onResume() {
