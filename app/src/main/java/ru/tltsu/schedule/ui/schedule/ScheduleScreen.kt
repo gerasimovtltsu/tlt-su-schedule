@@ -171,12 +171,45 @@ internal class ScheduleScreen(
     }
 
     private fun renderBottom(state: ScheduleState) {
-        val bottom = row()
-        bottom.addView(button("Сегодня") { onDate(today(), true) }, weight())
-        bottom.addView(button(if (state.allWeek) "● Неделя" else "Неделя", onToggleWeek), weight())
-        bottom.addView(button("Напоминания", onSettings), weight())
+        val bottom = row().apply {
+            setPadding(0, dp(8), 0, dp(6))
+        }
+        bottom.addView(
+            navigationButton("Сегодня", !state.allWeek && state.date == today()) {
+                onDate(today(), true)
+            },
+            weight().apply { marginEnd = dp(5) }
+        )
+        bottom.addView(
+            navigationButton("Неделя", state.allWeek, onToggleWeek),
+            weight().apply { marginStart = dp(5) }
+        )
         root.addView(bottom)
     }
+
+    private fun navigationButton(value: String, active: Boolean, action: () -> Unit) =
+        android.widget.Button(context).apply {
+            text = value
+            textSize = 15f
+            isAllCaps = false
+            isSelected = active
+            setTypeface(null, Typeface.BOLD)
+            setTextColor(if (active) Color.WHITE else accent)
+            minHeight = dp(48)
+            minimumHeight = dp(48)
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            stateListAnimator = null
+            backgroundTintList = null
+            val shape = rounded(if (active) Color.parseColor("#315DA8") else surface, 12).apply {
+                setStroke(dp(1), if (active) accent else Color.parseColor("#40536E"))
+            }
+            background = android.graphics.drawable.RippleDrawable(
+                android.content.res.ColorStateList.valueOf(0x33FFFFFF),
+                shape,
+                null
+            )
+            setOnClickListener { action() }
+        }
 
     private fun dp(value: Int): Int = (value * context.resources.displayMetrics.density).toInt()
     private fun weight() = LinearLayout.LayoutParams(0, -2, 1f)
