@@ -11,8 +11,32 @@ android {
         applicationId 'ru.tltsu.schedule'
         minSdk 26
         targetSdk 35
-        versionCode 6
-        versionName '0.6.0'
+        versionCode 7
+        versionName '0.7.0'
+    }
+
+    def signingFile = System.getenv('KEYSTORE_FILE')
+    def signingPassword = System.getenv('KEYSTORE_PASSWORD')
+
+    signingConfigs {
+        if (signingFile && signingPassword) {
+            release {
+                storeFile file(signingFile)
+                storeType 'PKCS12'
+                storePassword signingPassword
+                keyAlias 'schedule-tgu'
+                keyPassword signingPassword
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            if (signingFile && signingPassword) {
+                signingConfig signingConfigs.release
+            }
+            minifyEnabled false
+        }
     }
 
     compileOptions {

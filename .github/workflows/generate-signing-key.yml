@@ -1,0 +1,75 @@
+name: Generate Signing Key
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: generate-signing-key
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Validate secrets and generate key
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.SIGNING_SETUP_TOKEN }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$GH_TOKEN" || ${#KEYSTORE_PASSWORD} -lt 24 ]]; then
+            echo "::error::Set SIGNING_SETUP_TOKEN and KEYSTORE_PASSWORD (at least 24 characters) first."
+            exit 1
+          fi
+          existing=$(gh secret list --repo "$GITHUB_REPOSITORY" --json name --jq '.[].name')
+          if grep -Fxq KEYSTORE_BASE64 <<< "$existing"; then
+            echo "::error::A signing key already exists. Refusing to replace it."
+            exit 1
+          fi
+          umask 077
+          mkdir -p "$RUNNER_TEMP/signing-key"
+          keytool -genkeypair -noprompt \
+            -keystore "$RUNNER_TEMP/signing-key/schedule-tgu.p12" \
+            -storetype PKCS12 -storepass:env KEYSTORE_PASSWORD \
+            -keypass:env KEYSTORE_PASSWORD -alias schedule-tgu \
+            -keyalg RSA -keysize 3072 -validity 36500 \
+            -dname "CN=Schedule TGU"
+          if ! command -v 7z >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y p7zip-full
+          fi
+          cd "$RUNNER_TEMP/signing-key"
+          7z a -t7z -mhe=on "-p$KEYSTORE_PASSWORD" signing-backup.7z schedule-tgu.p12 >/dev/null
+      - name: Upload encrypted backup only
+        uses: actions/upload-artifact@v4
+        with:
+          name: encrypted-signing-backup
+          path: ${{ runner.temp }}/signing-key/signing-backup.7z
+          retention-days: 1
+          if-no-files-found: error
+      - name: Save key directly to repository secret
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.SIGNING_SETUP_TOKEN }}
+        run: |
+          set -euo pipefail
+          existing=$(gh secret list --repo "$GITHUB_REPOSITORY" --json name --jq '.[].name')
+          if grep -Fxq KEYSTORE_BASE64 <<< "$existing"; then
+            echo "::error::A signing key already exists. Refusing to replace it."
+            exit 1
+          fi
+          base64 -w0 "$RUNNER_TEMP/signing-key/schedule-tgu.p12" | gh secret set KEYSTORE_BASE64 --repo "$GITHUB_REPOSITORY"
+          echo "Signing key stored. Download the encrypted backup and revoke SIGNING_SETUP_TOKEN."
+      - name: Remove temporary key files
+        if: always()
+        shell: bash
+        run: rm -rf "$RUNNER_TEMP/signing-key"
