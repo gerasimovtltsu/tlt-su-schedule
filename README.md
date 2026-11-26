@@ -60,6 +60,8 @@ gradle assembleDebug
 
 ## Архитектура
 
-Kotlin, Android Views, HttpURLConnection, JSON, SharedPreferences, AlarmManager, JobScheduler. Границы недели рассчитываются в Europe/Samara и передаются API в UTC; часы занятий интерпретируются как местное время ТГУ.
+MVVM на AndroidX Lifecycle (ViewModel + LiveData), нативные Android Views, Repository, HttpURLConnection, JSON, SharedPreferences, AlarmManager, JobScheduler. Сетевой слой, кеш, модели, интерфейс, фоновые задачи и уведомления разделены. Границы недели рассчитываются в Europe/Samara и передаются API в UTC; часы занятий интерпретируются как местное время ТГУ.
+
+[Подробная структура проекта](docs/architecture.md). Модульные тесты: `gradle testDebugUnitTest`. CI запускает тесты перед сборкой и публикацией APK.
 
 Проект не является официальным приложением университета. Работоспособность зависит от доступности API ТГУ.
