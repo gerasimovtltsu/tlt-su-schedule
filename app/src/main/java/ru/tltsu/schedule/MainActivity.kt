@@ -71,7 +71,7 @@ private fun fetch(c:Context,w:LocalDate):List<Lesson>{
         return lessons
     } finally {conn.disconnect()}
 }
-private fun alarms(c:Context){
+@Synchronized private fun alarms(c:Context){
     val p=prefs(c)
     val manager=c.getSystemService(AlarmManager::class.java)
     val now=System.currentTimeMillis()
@@ -88,11 +88,12 @@ private fun alarms(c:Context){
         val i=intent(id).putExtra("name",l.name).putExtra("detail",l.time()+" · "+l.room+" · "+l.groups).putExtra("start",l.begins())
         val pi=PendingIntent.getBroadcast(c,0,i,flags)
         try {
-            if(Build.VERSION.SDK_INT<31 || manager.canScheduleExactAlarms())manager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,fireAt,pi)
+            if(Build.VERSION.SDK_INT<31 || manager.canScheduleExactAlarms())manager.setAlarmClock(AlarmManager.AlarmClockInfo(fireAt,PendingIntent.getActivity(c,0,Intent(c,MainActivity::class.java),PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)),pi)
             else manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,fireAt,pi)
         } catch(e:SecurityException){manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,fireAt,pi)}
     }
-    p.edit().putStringSet("alarm_ids",desired.keys.toSet()).apply()
+    val pending=desired.values.filter{p.getLong("sent_"+it.id,0)!=it.begins()}.sortedBy{it.begins()}
+    p.edit().putStringSet("alarm_ids",desired.keys.toSet()).putLong("planned_at",now).putString("planned_list",pending.joinToString("\n"){l->Instant.ofEpochMilli(maxOf(l.begins()-lead*60000L,now)).atZone(zone).format(DateTimeFormatter.ofPattern("dd.MM HH:mm"))+" — "+l.name}).apply()
 }
 private fun channel(c:Context){
     val ch=NotificationChannel("lessons_v2","Напоминания о парах",NotificationManager.IMPORTANCE_HIGH).apply {
@@ -108,17 +109,19 @@ class ReminderReceiver:BroadcastReceiver(){
         if(now>=start)return
         val id=i.data?.lastPathSegment
         val test=i.data?.host=="test"
+        prefs(c).edit().putString("last_alarm_event",Instant.ofEpochMilli(now).atZone(zone).toString()+" · "+i.data.toString()).apply()
         if(!test && id!=null){
             val lesson=(cached(c,week(today()))+cached(c,week(today()).plusWeeks(1))).firstOrNull{it.id==id && it.begins()==start} ?: return
             if(now<lesson.begins()-prefs(c).getInt("lead",15)*60000L){alarms(c);return}
             if(prefs(c).getLong("sent_$id",0)==start)return
         }
         if(Build.VERSION.SDK_INT>=33 && c.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)return
+        if(!c.getSystemService(NotificationManager::class.java).areNotificationsEnabled())return
         channel(c)
         val open=PendingIntent.getActivity(c,0,Intent(c,MainActivity::class.java),PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val n=Notification.Builder(c,"lessons_v2").setSmallIcon(R.drawable.ic_notification).setContentTitle("Скоро пара: "+i.getStringExtra("name")).setContentText(i.getStringExtra("detail")).setStyle(Notification.BigTextStyle().bigText(i.getStringExtra("detail"))).setContentIntent(open).setAutoCancel(true).build()
         c.getSystemService(NotificationManager::class.java).notify(i.data.toString().hashCode(),n)
-        if(!test && id!=null)prefs(c).edit().putLong("sent_$id",start).apply()
+        if(!test && id!=null)prefs(c).edit().putLong("sent_$id",start).putString("last_lesson_alert",Instant.ofEpochMilli(now).atZone(zone).toString()+" · "+i.getStringExtra("name")).apply()
     }
 }
 private fun scheduleJob(c:Context){
@@ -220,7 +223,7 @@ class MainActivity:Activity(){
         val exact=Build.VERSION.SDK_INT<31||getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
         val lead=prefs(this).getInt("lead",15)
         val enabled=getSystemService(NotificationManager::class.java).areNotificationsEnabled()
-        val options=arrayOf("За $lead мин. · изменить","Тестовое уведомление","Точные будильники · "+if(exact)"разрешены" else "не разрешены","Уведомления · "+if(enabled)"включены" else "выключены","Настройки приложения","Тест будильника через 30 секунд","Преподаватель · "+teacherName(this))
+        val options=arrayOf("За $lead мин. · изменить","Тестовое уведомление","Точные будильники · "+if(exact)"разрешены" else "не разрешены","Уведомления · "+if(enabled)"включены" else "выключены","Настройки приложения","Тест будильника через 30 секунд","Преподаватель · "+teacherName(this),"Диагностика напоминаний","Перепланировать напоминания")
         AlertDialog.Builder(this).setTitle("Напоминания").setItems(options){_,idx->
             when(idx){
                 0->{val values=intArrayOf(5,10,15,20,30);AlertDialog.Builder(this).setTitle("Напоминать до пары").setSingleChoiceItems(values.map{"$it мин."}.toTypedArray(),values.indexOf(lead)){dialog,which->prefs(this).edit().putInt("lead",values[which]).apply();alarms(this);dialog.dismiss()}.setNegativeButton("Отмена",null).show()}
@@ -229,13 +232,21 @@ class MainActivity:Activity(){
                 3->startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,packageName))
                 4->startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+packageName)))
                 6->chooseTeacher()
+                7->{
+                    val p=prefs(this)
+                    val exactNow=Build.VERSION.SDK_INT<31 || getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
+                    val channelNow=getSystemService(NotificationManager::class.java).getNotificationChannel("lessons_v2")
+                    val info="Точные будильники: "+(if(exactNow)"разрешены" else "НЕТ — возможна задержка")+"\nУведомления: "+(if(enabled)"включены" else "выключены")+"\nКанал: "+(if(channelNow!=null && channelNow.importance!=NotificationManager.IMPORTANCE_NONE)"включён" else "выключен")+"\nПоследнее срабатывание: "+p.getString("last_alarm_event","нет")+"\nПоследнее уведомление о паре: "+p.getString("last_lesson_alert","нет")+"\n\nЗапланировано (время Тольятти):\n"+p.getString("planned_list","нет данных")
+                    AlertDialog.Builder(this).setTitle("Диагностика").setMessage(info).setPositiveButton("Закрыть",null).setNeutralButton("Копировать"){_,_->(getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Диагностика",info))}.show()
+                }
+                8->{alarms(this);Toast.makeText(this,"Напоминания перепланированы",Toast.LENGTH_SHORT).show()}
                 5->{
                     val am=getSystemService(AlarmManager::class.java)
                     if(Build.VERSION.SDK_INT>=31 && !am.canScheduleExactAlarms()){Toast.makeText(this,"Разрешите точные будильники",Toast.LENGTH_LONG).show();return@setItems}
                     val at=System.currentTimeMillis()+30000L
                     val test=Intent(this,ReminderReceiver::class.java).setData(Uri.parse("schedule://test/alarm")).putExtra("name","Проверка будильника").putExtra("detail","Фоновое напоминание через AlarmManager").putExtra("start",at+600000L)
                     val pi=PendingIntent.getBroadcast(this,0,test,PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-                    try{am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,at,pi);Toast.makeText(this,"Заблокируйте экран. Проверка через 30 секунд",Toast.LENGTH_LONG).show()}catch(e:SecurityException){Toast.makeText(this,"Нет разрешения на точные будильники",Toast.LENGTH_LONG).show()}
+                    try{am.setAlarmClock(AlarmManager.AlarmClockInfo(at,PendingIntent.getActivity(this,0,Intent(this,MainActivity::class.java),PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)),pi);Toast.makeText(this,"Заблокируйте экран. Проверка через 30 секунд",Toast.LENGTH_LONG).show()}catch(e:SecurityException){Toast.makeText(this,"Нет разрешения на точные будильники",Toast.LENGTH_LONG).show()}
                 }
             }
         }.setNegativeButton("Закрыть",null).show()
