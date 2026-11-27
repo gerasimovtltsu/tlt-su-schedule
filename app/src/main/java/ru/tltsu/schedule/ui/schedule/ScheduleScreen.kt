@@ -106,12 +106,14 @@ internal class ScheduleScreen(
 
     private fun renderHeader(state: ScheduleState, monday: LocalDate, id: Int) {
         val top = row()
-        top.addView(label("Расписание ТГУ", 23f, Color.WHITE, true), weight())
+        top.addView(label("Расписание ТГУ", 22f, Color.WHITE, true), weight())
         top.addView(iconButton(R.drawable.ic_refresh_modern, "Обновить", onRefresh))
-        top.addView(iconButton(R.drawable.ic_settings_modern, "Настройки", onSettings))
+        top.addView(iconButton(R.drawable.ic_settings_modern, "Настройки", onSettings).apply {
+            (layoutParams as LinearLayout.LayoutParams).marginStart = dp(4)
+        })
         root.addView(top)
-        root.addView(label(teacherName(context) + "  ▾", 14f, accent, true).apply {
-            minHeight = dp(36)
+        root.addView(label(teacherName(context) + "  ▾", 14f, accent).apply {
+            minHeight = dp(32)
             gravity = Gravity.CENTER_VERTICAL
             background = ripple(Color.TRANSPARENT, 8)
             contentDescription = "Выбрать преподавателя: " + teacherName(context)
@@ -128,7 +130,7 @@ internal class ScheduleScreen(
             else -> "Нет загруженных данных"
         }
         root.addView(label(status, 12f, if (state.syncError) Color.parseColor("#F2C581") else muted))
-        root.gap(10)
+        root.gap(6)
         val nav = row()
         val format = DateTimeFormatter.ofPattern("d MMM", ru)
         nav.addView(iconButton(R.drawable.ic_chevron_left, "Предыдущая неделя") { onDate(state.date.minusWeeks(1), false) })
@@ -324,10 +326,10 @@ internal class ScheduleScreen(
     private fun iconButton(resource: Int, description: String, action: () -> Unit) = ImageButton(context).apply {
         setImageResource(resource)
         setColorFilter(accent)
-        background = ripple(surface, 12)
+        background = ripple(Color.TRANSPARENT, 24)
         contentDescription = description
-        setPadding(dp(11), dp(11), dp(11), dp(11))
-        scaleType = ImageView.ScaleType.FIT_CENTER
+        setPadding(dp(12), dp(12), dp(12), dp(12))
+        scaleType = ImageView.ScaleType.CENTER_INSIDE
         layoutParams = LinearLayout.LayoutParams(dp(48), dp(48))
         setOnClickListener { action() }
     }
