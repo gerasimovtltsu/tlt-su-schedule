@@ -10,6 +10,7 @@ import android.view.View
 import android.content.res.ColorStateList
 import android.graphics.drawable.RippleDrawable
 import ru.tltsu.schedule.R
+import ru.tltsu.schedule.ui.AppPalette
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -39,10 +40,11 @@ internal class ScheduleScreen(
     private val onSettings: () -> Unit,
     private val onTeacher: () -> Unit
 ) {
-    private val bg = Color.parseColor("#111827")
-    private val surface = Color.parseColor("#1E293B")
-    private val muted = Color.parseColor("#B4C1D4")
-    private val accent = Color.parseColor("#8EB5FF")
+    private val palette = AppPalette.current(context)
+    private val bg = palette.bg
+    private val surface = palette.surface
+    private val muted = palette.muted
+    private val accent = palette.accent
 
     private val compactLayout: Boolean
         get() = context.resources.configuration.fontScale >= 1.25f ||
@@ -98,7 +100,7 @@ internal class ScheduleScreen(
         val dates = if (state.allWeek) (0..6).map { monday.plusDays(it.toLong()) } else listOf(state.date)
         for (date in dates) {
             val day = lessons.filter { it.date == date }.sortedBy { it.start }
-            lessonContent.addView(label(date.format(dayFmt).replaceFirstChar { it.uppercase(ru) } + " · " + lessonCount(day.size), 17f, Color.WHITE, true))
+            lessonContent.addView(label(date.format(dayFmt).replaceFirstChar { it.uppercase(ru) } + " · " + lessonCount(day.size), 17f, palette.text, true))
             lessonContent.gap(8)
             if (day.isEmpty()) {
                 val message = when {
@@ -109,7 +111,7 @@ internal class ScheduleScreen(
                 lessonContent.addView(column().apply {
                     background = rounded(surface, 14)
                     setPadding(dp(16), dp(20), dp(16), dp(20))
-                    addView(label(message, 16f, Color.WHITE, true))
+                    addView(label(message, 16f, palette.text, true))
                     gap(5)
                     addView(label(if (state.loading) "Получаем данные…" else if (ScheduleRepository.readCached(context, monday, id) != null) "На этот день пары не запланированы" else "Нажмите кнопку обновления", 13f, muted))
                 })
@@ -126,7 +128,7 @@ internal class ScheduleScreen(
 
     private fun renderHeader(parent: LinearLayout, state: ScheduleState, monday: LocalDate, id: Int) {
         val top = row()
-        top.addView(label("Расписание ТГУ", if (compactLayout) 19f else 22f, Color.WHITE, true), weight())
+        top.addView(label("Расписание ТГУ", if (compactLayout) 19f else 22f, palette.text, true), weight())
         top.addView(iconButton(R.drawable.ic_refresh_modern, "Обновить", onRefresh))
         top.addView(iconButton(R.drawable.ic_settings_modern, "Настройки", onSettings).apply {
             (layoutParams as LinearLayout.LayoutParams).marginStart = dp(4)
@@ -149,12 +151,12 @@ internal class ScheduleScreen(
             }
             else -> "Нет загруженных данных"
         }
-        parent.addView(label(status, 12f, if (state.syncError) Color.parseColor("#F2C581") else muted))
+        parent.addView(label(status, 12f, if (state.syncError) palette.practice else muted))
         parent.gap(6)
         val nav = row()
         val format = DateTimeFormatter.ofPattern("d MMM", ru)
         nav.addView(iconButton(R.drawable.ic_chevron_left, "Предыдущая неделя") { onDate(state.date.minusWeeks(1), false) })
-        nav.addView(label(monday.format(format) + " — " + monday.plusDays(6).format(format), 17f, Color.WHITE, true).apply { gravity = Gravity.CENTER }, weight())
+        nav.addView(label(monday.format(format) + " — " + monday.plusDays(6).format(format), 17f, palette.text, true).apply { gravity = Gravity.CENTER }, weight())
         nav.addView(iconButton(R.drawable.ic_chevron_right, "Следующая неделя") { onDate(state.date.plusWeeks(1), false) })
         parent.addView(nav)
         parent.gap(6)
@@ -172,14 +174,14 @@ internal class ScheduleScreen(
                 gravity = Gravity.CENTER
                 setPadding(0, dp(5), 0, dp(5))
                 minimumHeight = dp(60)
-                background = ripple(if (selected) Color.parseColor("#315DA8") else surface, 10, if (isToday) accent else null)
+                background = ripple(if (selected) palette.selected else surface, 10, if (isToday) accent else null)
                 isSelected = selected
                 contentDescription = date.format(dayFmt) + ", " + lessonCount(count) + if (isToday) ", сегодня" else ""
                 setOnClickListener { onDate(date, true) }
             }
-            item.addView(label(names[index], 12f, if (selected) Color.WHITE else muted).apply { gravity = Gravity.CENTER })
-            item.addView(label(date.dayOfMonth.toString(), 16f, Color.WHITE, true).apply { gravity = Gravity.CENTER })
-            item.addView(label(if (count > 0) count.toString() else "–", 11f, if (selected) Color.WHITE else accent).apply { gravity = Gravity.CENTER })
+            item.addView(label(names[index], 12f, if (selected) palette.onSelected else muted).apply { gravity = Gravity.CENTER })
+            item.addView(label(date.dayOfMonth.toString(), 16f, if (selected) palette.onSelected else palette.text, true).apply { gravity = Gravity.CENTER })
+            item.addView(label(if (count > 0) count.toString() else "–", 11f, if (selected) palette.onSelected else accent).apply { gravity = Gravity.CENTER })
             days.addView(item, if (compactLayout) LinearLayout.LayoutParams(dp(54), -2).apply { setMargins(dp(2), 0, dp(2), 0) } else weight().apply { setMargins(dp(2), 0, dp(2), 0) })
         }
         if (compactLayout) {
@@ -196,7 +198,7 @@ internal class ScheduleScreen(
 
     private fun nextCard(lesson: Lesson, now: Long): LinearLayout {
         val banner = column().apply {
-            background = rounded(Color.parseColor("#233A5C"))
+            background = rounded(palette.highlight)
             setPadding(dp(14), dp(12), dp(14), dp(12))
         }
         val title = when {
@@ -209,9 +211,9 @@ internal class ScheduleScreen(
             banner.addView(label(if (lesson.number > 0) "БЛИЖАЙШАЯ ПАРА · №${lesson.number}" else "БЛИЖАЙШАЯ ПАРА", 11f, accent, true))
             banner.gap(4)
         }
-        banner.addView(label(title, 18f, Color.WHITE, true))
+        banner.addView(label(title, 18f, palette.text, true))
         banner.gap(2)
-        banner.addView(label(lesson.name, 16f, Color.WHITE, true))
+        banner.addView(label(lesson.name, 16f, palette.text, true))
         banner.gap(2)
         banner.addView(label(lesson.room + "  ·  " + lesson.time() + "  ·  " + lesson.type, 13f, muted))
         return banner
@@ -222,8 +224,8 @@ internal class ScheduleScreen(
         val past = lesson.ends() <= now
         val typeColor = when (lesson.type) {
             "Лекция" -> accent
-            "Лабораторная" -> Color.parseColor("#72D9BA")
-            else -> Color.parseColor("#F2C581")
+            "Лабораторная" -> palette.lab
+            else -> palette.practice
         }
         val line = if (compactLayout) column() else row().apply { gravity = Gravity.TOP }
         val times = column().apply { setPadding(0, dp(11), 0, 0) }
@@ -231,13 +233,13 @@ internal class ScheduleScreen(
             times.addView(label("№${lesson.number}", 12f, accent, true))
             times.gap(4)
         }
-        times.addView(label(lesson.start.toString(), 16f, Color.WHITE, true))
+        times.addView(label(lesson.start.toString(), 16f, palette.text, true))
         times.gap(3)
         times.addView(label(lesson.end.toString(), 13f, muted))
         if (!compactLayout) line.addView(times, LinearLayout.LayoutParams(dp(57), -2))
         val card = row().apply {
             gravity = Gravity.CENTER_VERTICAL
-            background = rounded(if (active) Color.parseColor("#233A5C") else surface, 14).apply {
+            background = rounded(if (active) palette.highlight else surface, 14).apply {
                 if (active) setStroke(dp(1), accent)
             }
             setPadding(dp(if (compactLayout) 8 else 9), dp(if (compactLayout) 7 else 11), dp(if (compactLayout) 10 else 12), dp(if (compactLayout) 7 else 11))
@@ -252,9 +254,9 @@ internal class ScheduleScreen(
             details.addView(label("ИДЁТ СЕЙЧАС", 11f, accent, true))
             details.gap(4)
         }
-        details.addView(label(lesson.name, if (compactLayout) 15f else 16f, Color.WHITE, true).apply { setLineSpacing(dp(if (compactLayout) 0 else 2).toFloat(), 1f) })
+        details.addView(label(lesson.name, if (compactLayout) 15f else 16f, palette.text, true).apply { setLineSpacing(dp(if (compactLayout) 0 else 2).toFloat(), 1f) })
         details.gap(if (compactLayout) 3 else 6)
-        details.addView(label(lesson.room.ifBlank { "Аудитория не указана" }, 15f, Color.WHITE, true))
+        details.addView(label(lesson.room.ifBlank { "Аудитория не указана" }, 15f, palette.text, true))
         details.gap(if (compactLayout) 2 else 4)
         if (compactLayout) {
             val combined = listOf(lesson.type, lesson.groups).filter { it.isNotBlank() }.joinToString(" · ")
@@ -273,7 +275,10 @@ internal class ScheduleScreen(
             details.addView(label(lesson.note, 12f, muted))
         }
         card.addView(details, weight())
-        if (past) line.alpha = 0.78f
+        // Keep completed lessons readable; status is indicated without fading text.
+        if (past) {
+            details.addView(label("Завершено", 11f, muted))
+        }
         line.addView(card, if (compactLayout) LinearLayout.LayoutParams(-1, -2) else weight())
         return line
     }
@@ -302,9 +307,9 @@ internal class ScheduleScreen(
             isAllCaps = false
             isSelected = active
             setTypeface(null, Typeface.BOLD)
-            setTextColor(if (active) Color.WHITE else accent)
+            setTextColor(if (active) palette.onSelected else accent)
             val glyph = context.getDrawable(icon)?.mutate()
-            glyph?.setTint(if (active) Color.WHITE else accent)
+            glyph?.setTint(if (active) palette.onSelected else accent)
             glyph?.setBounds(0, 0, dp(20), dp(20))
             if (!compactLayout) setCompoundDrawablesRelative(glyph, null, null, null)
             compoundDrawablePadding = dp(6)
@@ -313,11 +318,11 @@ internal class ScheduleScreen(
             setPadding(dp(if (compactLayout) 6 else 12), dp(if (compactLayout) 4 else 10), dp(if (compactLayout) 6 else 12), dp(if (compactLayout) 4 else 10))
             stateListAnimator = null
             backgroundTintList = null
-            val shape = rounded(if (active) Color.parseColor("#315DA8") else surface, 12).apply {
-                setStroke(dp(1), if (active) accent else Color.parseColor("#40536E"))
+            val shape = rounded(if (active) palette.selected else surface, 12).apply {
+                setStroke(dp(1), if (active) accent else palette.border)
             }
             background = android.graphics.drawable.RippleDrawable(
-                android.content.res.ColorStateList.valueOf(0x33FFFFFF),
+                android.content.res.ColorStateList.valueOf(palette.ripple),
                 shape,
                 null
             )
@@ -325,7 +330,7 @@ internal class ScheduleScreen(
         }
 
     private fun ripple(color: Int, radius: Int, stroke: Int? = null) =
-        RippleDrawable(ColorStateList.valueOf(0x33FFFFFF), rounded(color, radius).apply {
+        RippleDrawable(ColorStateList.valueOf(palette.ripple), rounded(color, radius).apply {
             if (stroke != null) setStroke(dp(1), stroke)
         }, rounded(Color.WHITE, radius))
 
@@ -351,7 +356,7 @@ internal class ScheduleScreen(
         setColor(color)
         cornerRadius = dp(radius).toFloat()
     }
-    private fun label(value: String, size: Float, color: Int = Color.WHITE, bold: Boolean = false) =
+    private fun label(value: String, size: Float, color: Int = palette.text, bold: Boolean = false) =
         TextView(context).apply {
             text = value
             textSize = size

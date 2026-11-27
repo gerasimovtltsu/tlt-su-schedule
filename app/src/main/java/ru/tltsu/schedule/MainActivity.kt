@@ -3,6 +3,7 @@ package ru.tltsu.schedule
 import android.Manifest
 import android.content.Context
 import ru.tltsu.schedule.ui.InterfaceSize
+import ru.tltsu.schedule.ui.AppPalette
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -23,6 +24,7 @@ import ru.tltsu.schedule.update.UpdateManager
 
 class MainActivity : ComponentActivity() {
     private lateinit var appliedSize: InterfaceSize
+    private lateinit var appliedPalette: AppPalette
     private lateinit var model: ScheduleViewModel
     private lateinit var screen: ScheduleScreen
     private val handler = Handler(Looper.getMainLooper())
@@ -43,7 +45,10 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        appliedPalette = AppPalette.current(this)
+        setTheme(appliedPalette.style)
         super.onCreate(savedInstanceState)
+        appliedPalette.applyWindow(this)
         NotificationHelper.createChannel(this)
         ScheduleSync.schedule(this)
         setContentView(R.layout.activity_main)
@@ -73,7 +78,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (appliedSize != InterfaceSize.current(this)) {
+        if (appliedSize != InterfaceSize.current(this) || appliedPalette != AppPalette.current(this)) {
             recreate()
             return
         }

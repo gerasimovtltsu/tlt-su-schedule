@@ -3,6 +3,7 @@ package ru.tltsu.schedule.ui.settings
 import android.app.Activity
 import android.content.Context
 import ru.tltsu.schedule.ui.InterfaceSize
+import ru.tltsu.schedule.ui.AppPalette
 import android.app.AlertDialog
 import android.app.NotificationManager
 import android.content.Intent
@@ -26,8 +27,9 @@ import ru.tltsu.schedule.update.GitHubReleaseApi
 class SettingsActivity : Activity() {
     private lateinit var body: LinearLayout
     private var scroll: ScrollView? = null
-    private val accent = Color.parseColor("#8EB5FF")
-    private val muted = Color.parseColor("#B4C1D4")
+    private val palette by lazy { AppPalette.current(this) }
+    private val accent get() = palette.accent
+    private val muted get() = palette.muted
     private fun dp(n: Int) = (n * resources.displayMetrics.density).toInt()
 
     override fun attachBaseContext(newBase: Context) {
@@ -35,7 +37,9 @@ class SettingsActivity : Activity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        setTheme(AppPalette.current(this).style)
         super.onCreate(savedInstanceState)
+        palette.applyWindow(this)
         render()
     }
 
@@ -48,7 +52,7 @@ class SettingsActivity : Activity() {
         val savedY = scroll?.scrollY ?: 0
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#111827"))
+            setBackgroundColor(palette.bg)
             setPadding(dp(16), dp(12), dp(16), dp(8))
         }
         root.setOnApplyWindowInsetsListener { view, insets ->
@@ -59,7 +63,7 @@ class SettingsActivity : Activity() {
         val header = TextView(this).apply {
             text = "‹   Настройки"
             textSize = 23f
-            setTextColor(Color.WHITE)
+            setTextColor(palette.text)
             setPadding(0, dp(8), 0, dp(14))
             setOnClickListener { finish() }
         }
@@ -89,7 +93,7 @@ class SettingsActivity : Activity() {
         item("До начала пары", "За ${prefs(this).getInt("lead", 15)} мин.") { actions.chooseLead(prefs(this).getInt("lead", 15)) }
         body.addView(Switch(this).apply {
             text = "Уведомлять об окончании пары"
-            setTextColor(Color.WHITE)
+            setTextColor(palette.text)
             setPadding(0, dp(12), 0, dp(12))
             isChecked = prefs(this@SettingsActivity).getBoolean("notify_lesson_end", false)
             setOnCheckedChangeListener { _, checked ->
@@ -107,7 +111,7 @@ class SettingsActivity : Activity() {
         section("ИЗМЕНЕНИЯ РАСПИСАНИЯ")
         body.addView(Switch(this).apply {
             text = "Сообщать об изменениях расписания"
-            setTextColor(Color.WHITE)
+            setTextColor(palette.text)
             setPadding(0, dp(12), 0, dp(12))
             isChecked = prefs(this@SettingsActivity).getBoolean("notify_changes", true)
             setOnCheckedChangeListener { _, checked -> prefs(this@SettingsActivity).edit().putBoolean("notify_changes", checked).apply() }
@@ -127,6 +131,7 @@ class SettingsActivity : Activity() {
             android.widget.Toast.makeText(this, "Напоминания перепланированы", android.widget.Toast.LENGTH_SHORT).show()
         }
         section("ОФОРМЛЕНИЕ")
+        item("Цветовая тема", palette.title) { choosePalette() }
         item("Масштаб текста", InterfaceSize.current(this).title) { chooseInterfaceSize() }
         section("ПРИЛОЖЕНИЕ")
         item("Проверить обновления", "Версия " + UpdateManager.installed(this)) { UpdateManager.check(this, true) }
@@ -135,6 +140,58 @@ class SettingsActivity : Activity() {
                 .setPositiveButton("GitHub") { _, _ -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(GitHubReleaseApi.RELEASES))) }
                 .setNegativeButton("Закрыть", null).show()
         }
+    }
+
+    private fun choosePalette() {
+        val options = AppPalette.values()
+        val list = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(8), dp(16), dp(8))
+        }
+        val scroller = ScrollView(this).apply {
+            isVerticalScrollBarEnabled = false
+            addView(list)
+        }
+        val dialog = AlertDialog.Builder(this).setTitle("Цветовая тема")
+            .setView(scroller).setNegativeButton("Отмена", null).create()
+        for (option in options) {
+            val tile = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(12), dp(9), dp(12), dp(9))
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(option.bg)
+                    cornerRadius = dp(12).toFloat()
+                    setStroke(dp(if (option == palette) 2 else 1), if (option == palette) option.accent else option.border)
+                }
+                contentDescription = option.title + if (option == palette) ", выбрана" else ""
+                isSelected = option == palette
+                setOnClickListener {
+                    dialog.dismiss()
+                    if (option != palette) {
+                        AppPalette.save(this@SettingsActivity, option)
+                        recreate()
+                    }
+                }
+            }
+            tile.addView(TextView(this).apply {
+                text = option.title + if (option == palette) " · Выбрана" else ""
+                textSize = 15f
+                setTextColor(option.text)
+                setTypeface(null, android.graphics.Typeface.BOLD)
+            })
+            tile.addView(TextView(this).apply {
+                text = "2-я пара · УЛК-203"
+                textSize = 13f
+                setTextColor(option.accent)
+                setPadding(dp(8), dp(6), dp(8), dp(6))
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(option.surface)
+                    cornerRadius = dp(8).toFloat()
+                }
+            })
+            list.addView(tile, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
+        }
+        dialog.show()
     }
 
     private fun chooseEndLead() {
@@ -184,7 +241,7 @@ class SettingsActivity : Activity() {
         val preview = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = android.graphics.drawable.GradientDrawable().apply {
-                setColor(Color.parseColor("#1E293B"))
+                setColor(palette.surface)
                 cornerRadius = dp(12).toFloat()
             }
             setPadding(dp(12), dp(12), dp(12), dp(12))
@@ -192,7 +249,7 @@ class SettingsActivity : Activity() {
         val time = TextView(this).apply { text = "2-я пара · 10:15 – 11:45"; setTextColor(muted) }
         val name = TextView(this).apply {
             text = "Средства программной разработки"
-            setTextColor(Color.WHITE)
+            setTextColor(palette.text)
             setTypeface(null, android.graphics.Typeface.BOLD)
         }
         val room = TextView(this).apply { text = "УЛК-203 · Практика"; setTextColor(accent) }
@@ -266,7 +323,7 @@ class SettingsActivity : Activity() {
             setOnClickListener { action() }
         }
         val text = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        text.addView(TextView(this).apply { this.text = title; textSize = 16f; setTextColor(Color.WHITE) })
+        text.addView(TextView(this).apply { this.text = title; textSize = 16f; setTextColor(palette.text) })
         text.addView(TextView(this).apply { this.text = subtitle; textSize = 13f; setTextColor(muted) })
         row.addView(text, LinearLayout.LayoutParams(0, -2, 1f))
         row.addView(android.widget.ImageView(this).apply {
@@ -275,6 +332,6 @@ class SettingsActivity : Activity() {
             importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }, LinearLayout.LayoutParams(dp(20), dp(20)).apply { marginStart = dp(8) })
         body.addView(row)
-        body.addView(android.view.View(this).apply { setBackgroundColor(Color.parseColor("#263449")) }, LinearLayout.LayoutParams(-1, dp(1)))
+        body.addView(android.view.View(this).apply { setBackgroundColor(palette.border) }, LinearLayout.LayoutParams(-1, dp(1)))
     }
 }
