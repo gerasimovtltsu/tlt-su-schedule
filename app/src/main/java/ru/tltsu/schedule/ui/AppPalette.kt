@@ -49,6 +49,32 @@ internal data class AppPalette(
         } + contrast(onSelected, selected)).minOrNull() ?: 0.0
     }
 
+    fun corrected(): AppPalette {
+        // Preserve the background and hue choices where possible, but align surfaces
+        // with the background if no foreground can meet the target on all three.
+        val target = if (light) BLACK else WHITE
+        var p = this
+        if (listOf(bg, surface, highlight).any { contrast(target, it) < 4.5 }) {
+            p = p.copy(cardColor = blend(cardColor, bg, 15), activeColor = blend(activeColor, bg, 15))
+        }
+        if (listOf(p.bg, p.surface, p.highlight).any { contrast(target, it) < 4.5 }) {
+            p = p.copy(cardColor = bg, activeColor = bg)
+        }
+        val backs = listOf(p.bg, p.surface, p.highlight)
+        fun readable(color: Int, backgrounds: List<Int>, end: Int): Int {
+            for (step in 0..100) {
+                val candidate = blend(end, color, step)
+                if (backgrounds.all { contrast(candidate, it) >= 4.5 }) return candidate
+            }
+            return end
+        }
+        val buttonText = if (contrast(BLACK, p.selected) >= contrast(WHITE, p.selected)) BLACK else WHITE
+        return p.copy(text = readable(p.text, backs, target), muted = readable(p.muted, backs, target),
+            accent = readable(p.accent, backs, target), lab = readable(p.lab, backs, target),
+            practice = readable(p.practice, backs, target), lecture = readable(p.lecture, backs, target),
+            onSelected = readable(p.onSelected, listOf(p.selected), buttonText))
+    }
+
     fun applyWindow(activity: Activity) {
         activity.window.statusBarColor = bg
         activity.window.navigationBarColor = bg
@@ -97,11 +123,10 @@ internal data class AppPalette(
                 ?: LegacyPalette.MIDNIGHT
             val base = fromLegacy(previous)
             val raw = storage.getString(KEY, null) ?: return base
-            return runCatching { decode(raw) }.getOrNull()?.takeIf { it.minContrast() >= 4.5 } ?: base
+            return runCatching { decode(raw) }.getOrNull() ?: base
         }
 
         fun save(context: Context, palette: AppPalette) {
-            require(palette.minContrast() >= 4.5)
             prefs(context).edit().putString(KEY, palette.encode()).apply()
         }
 

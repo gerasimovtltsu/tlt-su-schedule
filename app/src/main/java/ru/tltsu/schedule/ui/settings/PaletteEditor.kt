@@ -11,7 +11,7 @@ import android.widget.*
 import ru.tltsu.schedule.ui.AppPalette
 import java.util.Locale
 
-/** Draft changes are isolated until Apply; invalid contrast cannot be saved. */
+/** Draft changes are isolated until Apply; low contrast requires explicit confirmation. */
 internal class PaletteEditor(
     private val activity: Activity,
     initial: AppPalette,
@@ -53,15 +53,27 @@ internal class PaletteEditor(
                 refresh()
             }
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                if (draft.minContrast() >= 4.5) {
-                    dialog.dismiss()
-                    onApply(draft)
-                }
+                if (draft.minContrast() >= 4.5) applyDraft()
+                else AlertDialog.Builder(activity)
+                    .setTitle("Низкая контрастность")
+                    .setMessage("Некоторые надписи могут быть плохо видны. Исправить цвета автоматически или сохранить выбранные?")
+                    .setPositiveButton("Исправить") { _, _ ->
+                        draft = draft.corrected()
+                        buildControls()
+                        refresh()
+                    }
+                    .setNeutralButton("Всё равно сохранить") { _, _ -> applyDraft() }
+                    .setNegativeButton("Отмена", null).show()
             }
             refresh()
         }
         buildControls()
         dialog.show()
+    }
+
+    private fun applyDraft() {
+        dialog.dismiss()
+        onApply(draft)
     }
 
     private fun buildControls() {
@@ -139,8 +151,8 @@ internal class PaletteEditor(
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6) })
         val contrast = draft.minContrast()
         warning.text = String.format(Locale.ROOT, "Контрастность %.2f:1 · %s", contrast,
-            if (contrast >= 4.5) "можно сохранить" else "ниже 4,5:1 — измените цвета или прозрачность")
-        if (::dialog.isInitialized) dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.isEnabled = contrast >= 4.5
+            if (contrast >= 4.5) "можно сохранить" else "ниже 4,5:1 — рекомендуется коррекция")
+        if (::dialog.isInitialized) dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.isEnabled = true
     }
 
     private fun editColor(index: Int, save: (Int) -> Unit) {
@@ -154,13 +166,25 @@ internal class PaletteEditor(
             setText(hex(original))
         }
         panel.addView(input)
+        val visual = HsvPicker(activity)
+        panel.addView(visual, LinearLayout.LayoutParams(-1, dp(200)))
+        val hue = SeekBar(activity).apply { max = 359; contentDescription = "Цветовой тон"; minimumHeight = dp(48) }
+        panel.addView(text("Цветовой тон"))
+        panel.addView(hue)
         val channels = intArrayOf((original ushr 16) and 255, (original ushr 8) and 255, original and 255)
         val sliders = mutableListOf<SeekBar>()
         val labels = mutableListOf<TextView>()
         var updating = false
         fun color() = Color.rgb(channels[0], channels[1], channels[2])
-        fun update() {
+        fun update(syncPicker: Boolean = true) {
             swatch.background = shape(color(), 8, 0xFF888888.toInt())
+            if (syncPicker) {
+                visual.setColor(color())
+                val wasUpdating = updating
+                updating = true
+                hue.progress = visual.hue.toInt().coerceIn(0, 359)
+                updating = wasUpdating
+            }
             labels.forEachIndexed { i, label -> label.text = "${listOf("R", "G", "B")[i]}: ${channels[i]}" }
         }
         for (i in 0..2) {
@@ -183,6 +207,28 @@ internal class PaletteEditor(
             }
             sliders.add(slider); panel.addView(slider)
         }
+        fun fromVisual(c: Int) {
+            updating = true
+            for (i in 0..2) {
+                channels[i] = (c ushr (16 - 8*i)) and 255
+                sliders[i].progress = channels[i]
+            }
+            input.setText(hex(c))
+            input.error = null
+            update(false)
+            updating = false
+        }
+        visual.onColor = { fromVisual(it) }
+        hue.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(bar: SeekBar, value: Int, fromUser: Boolean) {
+                if (!updating && fromUser) {
+                    visual.setHue(value.toFloat())
+                    fromVisual(visual.color())
+                }
+            }
+            override fun onStartTrackingTouch(bar: SeekBar) {}
+            override fun onStopTrackingTouch(bar: SeekBar) {}
+        })
         fun parse(): Int? {
             val raw = input.text.toString().trim().removePrefix("#")
             if (!raw.matches(Regex("[0-9a-fA-F]{6}"))) return null
