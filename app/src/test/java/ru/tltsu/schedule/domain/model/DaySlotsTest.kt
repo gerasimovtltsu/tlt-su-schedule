@@ -13,11 +13,11 @@ class DaySlotsTest {
     private fun gaps(vararg lessons: Lesson) = daySlots(lessons.toList())
         .filterIsInstance<DaySlot.Empty>().map { it.number }
 
-    @Test fun internalGap() { assertEquals(listOf(4), gaps(lesson(3, 12), lesson(5, 16))) }
+    @Test fun internalGap() { assertEquals(listOf(1, 2, 4), gaps(lesson(3, 12), lesson(5, 16))) }
     @Test fun multipleGaps() { assertEquals(listOf(2, 3), gaps(lesson(1, 8), lesson(4, 14))) }
-    @Test fun noLeadingOrTrailingGaps() { assertTrue(gaps(lesson(5, 16)).isEmpty()) }
-    @Test fun consecutivePairs() { assertTrue(gaps(lesson(2, 10), lesson(3, 12)).isEmpty()) }
+    @Test fun leadingButNoTrailingGaps() { assertEquals(listOf(1, 2, 3, 4), gaps(lesson(5, 16))) }
+    @Test fun consecutivePairs() { assertEquals(listOf(1), gaps(lesson(2, 10), lesson(3, 12))) }
     @Test fun unknownNumber() { assertTrue(gaps(lesson(0, 10), lesson(5, 16)).isEmpty()) }
-    @Test fun duplicates() { assertEquals(listOf(3), gaps(lesson(2, 10), lesson(2, 10, "duplicate"), lesson(4, 14))) }
+    @Test fun duplicates() { assertEquals(listOf(1, 3), gaps(lesson(2, 10), lesson(2, 10, "duplicate"), lesson(4, 14))) }
     @Test fun emptyDay() { assertTrue(daySlots(emptyList()).isEmpty()) }
 }
