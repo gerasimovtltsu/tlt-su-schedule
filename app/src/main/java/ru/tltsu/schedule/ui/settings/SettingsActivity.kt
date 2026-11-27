@@ -22,6 +22,7 @@ import ru.tltsu.schedule.update.GitHubReleaseApi
 
 class SettingsActivity : Activity() {
     private lateinit var body: LinearLayout
+    private var scroll: ScrollView? = null
     private val accent = Color.parseColor("#8EB5FF")
     private val muted = Color.parseColor("#B4C1D4")
     private fun dp(n: Int) = (n * resources.displayMetrics.density).toInt()
@@ -37,6 +38,7 @@ class SettingsActivity : Activity() {
     }
 
     private fun render() {
+        val savedY = scroll?.scrollY ?: 0
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.parseColor("#111827"))
@@ -56,7 +58,13 @@ class SettingsActivity : Activity() {
         }
         root.addView(header)
         body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        root.addView(ScrollView(this).apply { addView(body) }, LinearLayout.LayoutParams(-1, 0, 1f))
+        val contentScroll = ScrollView(this).apply {
+            isVerticalScrollBarEnabled = false
+            addView(body)
+        }
+        scroll = contentScroll
+        root.addView(contentScroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        contentScroll.post { contentScroll.scrollTo(0, savedY) }
         setContentView(root)
         val actions = SettingsDialogs(this) { id ->
             val p = prefs(this)
@@ -120,7 +128,11 @@ class SettingsActivity : Activity() {
         text.addView(TextView(this).apply { this.text = title; textSize = 16f; setTextColor(Color.WHITE) })
         text.addView(TextView(this).apply { this.text = subtitle; textSize = 13f; setTextColor(muted) })
         row.addView(text, LinearLayout.LayoutParams(0, -2, 1f))
-        row.addView(TextView(this).apply { this.text = "›"; textSize = 24f; setTextColor(accent) })
+        row.addView(android.widget.ImageView(this).apply {
+            setImageResource(ru.tltsu.schedule.R.drawable.ic_chevron_right)
+            setColorFilter(accent)
+            importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(dp(20), dp(20)).apply { marginStart = dp(8) })
         body.addView(row)
         body.addView(android.view.View(this).apply { setBackgroundColor(Color.parseColor("#263449")) }, LinearLayout.LayoutParams(-1, dp(1)))
     }
