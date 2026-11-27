@@ -24,6 +24,8 @@ import ru.tltsu.schedule.data.local.teacher
 import ru.tltsu.schedule.data.local.teacherName
 import ru.tltsu.schedule.data.repository.ScheduleRepository
 import ru.tltsu.schedule.domain.model.Lesson
+import ru.tltsu.schedule.domain.model.DaySlot
+import ru.tltsu.schedule.domain.model.daySlots
 import ru.tltsu.schedule.util.dayFmt
 import ru.tltsu.schedule.util.ru
 import ru.tltsu.schedule.util.today
@@ -117,8 +119,11 @@ internal class ScheduleScreen(
                 })
                 lessonContent.gap(16)
             }
-            for (lesson in day) {
-                lessonContent.addView(lessonCard(lesson, now))
+            for (slot in daySlots(day)) {
+                when (slot) {
+                    is DaySlot.Occupied -> lessonContent.addView(lessonCard(slot.lesson, now))
+                    is DaySlot.Empty -> lessonContent.addView(emptySlot(slot.number))
+                }
                 lessonContent.gap(if (compactLayout) 7 else 10)
             }
             lessonContent.gap(8)
@@ -217,6 +222,24 @@ internal class ScheduleScreen(
         banner.gap(2)
         banner.addView(label(lesson.room + "  ·  " + lesson.time() + "  ·  " + lesson.type, 13f, muted))
         return banner
+    }
+
+    private fun emptySlot(number: Int): LinearLayout {
+        val line = row()
+        if (!compactLayout) {
+            line.addView(label("№$number", 12f, muted, true), LinearLayout.LayoutParams(dp(57), -2))
+        }
+        val empty = row().apply {
+            minimumHeight = dp(32)
+            setPadding(dp(10), dp(5), dp(10), dp(5))
+            background = rounded(bg, 10).apply {
+                setStroke(dp(1), palette.border, dp(4).toFloat(), dp(3).toFloat())
+            }
+            contentDescription = "$number-я пара: нет занятия"
+            addView(label(if (compactLayout) "$number-я пара · Нет пары" else "Нет пары", 12f, muted))
+        }
+        line.addView(empty, weight())
+        return line
     }
 
     private fun lessonCard(lesson: Lesson, now: Long): LinearLayout {
