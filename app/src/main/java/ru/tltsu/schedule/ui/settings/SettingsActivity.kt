@@ -14,6 +14,10 @@ import android.os.Bundle
 import android.provider.Settings
 import android.view.Gravity
 import android.widget.LinearLayout
+import android.widget.ImageView
+import android.view.View
+import android.content.res.ColorStateList
+import ru.tltsu.schedule.R
 import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
@@ -108,58 +112,49 @@ class SettingsActivity : Activity() {
             }
         }
         section("РАСПИСАНИЕ")
-        item("Преподаватель", teacherName(this)) { actions.chooseTeacher() }
-        item("Автообновление расписания", "Примерно каждый час") {
+        item(R.drawable.ic_pref_teacher, "Преподаватель", teacherName(this)) { actions.chooseTeacher() }
+        item(R.drawable.ic_pref_sync, "Автообновление расписания", "Примерно каждый час") {
             AlertDialog.Builder(this).setMessage("Android выполняет фоновое обновление примерно раз в час при наличии сети.").setPositiveButton("OK", null).show()
         }
         section("НАПОМИНАНИЯ О ПАРАХ")
-        startLeadSubtitle = item("До начала пары", startLeadLabel()) { actions.chooseLead(prefs(this).getInt("lead", 15)) }
+        startLeadSubtitle = item(R.drawable.ic_pref_before, "До начала пары", startLeadLabel()) { actions.chooseLead(prefs(this).getInt("lead", 15)) }
         endLeadSubtitle = null
-        body.addView(Switch(this).apply {
-            text = "Уведомлять об окончании пары"
-            setTextColor(palette.text)
-            setPadding(0, dp(12), 0, dp(12))
-            isChecked = prefs(this@SettingsActivity).getBoolean("notify_lesson_end", false)
-            setOnCheckedChangeListener { _, checked ->
-                val activity = this@SettingsActivity
-                prefs(activity).edit().putBoolean("notify_lesson_end", checked).apply()
-                if (checked) ru.tltsu.schedule.notification.NotificationHelper.createChannel(
-                    activity, ru.tltsu.schedule.notification.NotificationHelper.END_CHANNEL_ID)
-                ReminderScheduler.request(activity)
-                render()
-            }
-        })
+        switchItem(R.drawable.ic_pref_end, "Уведомлять об окончании пары",
+            prefs(this).getBoolean("notify_lesson_end", false)) { checked ->
+            prefs(this).edit().putBoolean("notify_lesson_end", checked).apply()
+            if (checked) ru.tltsu.schedule.notification.NotificationHelper.createChannel(
+                this, ru.tltsu.schedule.notification.NotificationHelper.END_CHANNEL_ID)
+            ReminderScheduler.request(this)
+            render()
+        }
         if (prefs(this).getBoolean("notify_lesson_end", false)) {
-            endLeadSubtitle = item("Время оповещения об окончании", endLeadLabel()) { chooseEndLead() }
+            endLeadSubtitle = item(R.drawable.ic_pref_end_time, "Время оповещения об окончании", endLeadLabel()) { chooseEndLead() }
         }
         section("ИЗМЕНЕНИЯ РАСПИСАНИЯ")
-        body.addView(Switch(this).apply {
-            text = "Сообщать об изменениях расписания"
-            setTextColor(palette.text)
-            setPadding(0, dp(12), 0, dp(12))
-            isChecked = prefs(this@SettingsActivity).getBoolean("notify_changes", true)
-            setOnCheckedChangeListener { _, checked -> prefs(this@SettingsActivity).edit().putBoolean("notify_changes", checked).apply() }
-        })
+        switchItem(R.drawable.ic_pref_changes, "Сообщать об изменениях расписания",
+            prefs(this).getBoolean("notify_changes", true)) { checked ->
+            prefs(this).edit().putBoolean("notify_changes", checked).apply()
+        }
         section("СИСТЕМНЫЕ РАЗРЕШЕНИЯ")
-        item("Точные будильники", if (ReminderScheduler.exactAllowed(this)) "Разрешены" else "Требуется разрешение") {
+        item(R.drawable.ic_pref_alarm, "Точные будильники", if (ReminderScheduler.exactAllowed(this)) "Разрешены" else "Требуется разрешение") {
             if (Build.VERSION.SDK_INT >= 31) runCatching { startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:$packageName"))) }
         }
-        item("Системные уведомления", "Настройки каналов") { startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName)) }
-        item("Фоновая работа", "Системные настройки приложения") { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))) }
+        item(R.drawable.ic_pref_bell, "Системные уведомления", "Настройки каналов") { startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName)) }
+        item(R.drawable.ic_pref_battery, "Фоновая работа", "Системные настройки приложения") { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))) }
         section("ДИАГНОСТИКА")
-        item("Тестовое уведомление", "Отправить сейчас") { actions.test(false) }
-        item("Тест будильника", "Через 30 секунд") { actions.test(true) }
-        item("Диагностика", "Запланированные напоминания") { DiagnosticsDialog.show(this) }
-        item("Перепланировать напоминания", "Пересчитать будильники") {
+        item(R.drawable.ic_pref_test_bell, "Тестовое уведомление", "Отправить сейчас") { actions.test(false) }
+        item(R.drawable.ic_pref_timer, "Тест будильника", "Через 30 секунд") { actions.test(true) }
+        item(R.drawable.ic_pref_diagnostics, "Диагностика", "Запланированные напоминания") { DiagnosticsDialog.show(this) }
+        item(R.drawable.ic_pref_replan, "Перепланировать напоминания", "Пересчитать будильники") {
             ReminderScheduler.request(this)
             android.widget.Toast.makeText(this, "Напоминания перепланированы", android.widget.Toast.LENGTH_SHORT).show()
         }
         section("ОФОРМЛЕНИЕ")
-        item("Настройка цветов и оформления", palette.title) { choosePalette() }
-        item("Масштаб текста", InterfaceSize.current(this).title) { chooseInterfaceSize() }
+        item(R.drawable.ic_pref_palette, "Настройка цветов и оформления", palette.title) { choosePalette() }
+        item(R.drawable.ic_pref_text, "Масштаб текста", InterfaceSize.current(this).title) { chooseInterfaceSize() }
         section("ПРИЛОЖЕНИЕ")
-        item("Проверить обновления", "Версия " + UpdateManager.installed(this)) { UpdateManager.check(this, true) }
-        item("О приложении", "Расписание ТГУ · GitHub") {
+        item(R.drawable.ic_pref_update, "Проверить обновления", "Версия " + UpdateManager.installed(this)) { UpdateManager.check(this, true) }
+        item(R.drawable.ic_pref_info, "О приложении", "Расписание ТГУ · GitHub") {
             AlertDialog.Builder(this).setTitle("Расписание ТГУ").setMessage("Версия " + UpdateManager.installed(this) + "\nНеофициальное приложение для преподавателей ТГУ.\nНативный Android · Kotlin")
                 .setPositiveButton("GitHub") { _, _ -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(GitHubReleaseApi.RELEASES))) }
                 .setNegativeButton("Закрыть", null).show()
@@ -293,13 +288,16 @@ class SettingsActivity : Activity() {
         })
     }
 
-    private fun item(title: String, subtitle: String, action: () -> Unit): TextView {
+    private fun item(iconRes: Int, title: String, subtitle: String, action: () -> Unit): TextView {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = dp(48)
             setPadding(0, dp(10), 0, dp(10))
+            background = android.graphics.drawable.RippleDrawable(ColorStateList.valueOf(palette.ripple), null, android.graphics.drawable.ColorDrawable(Color.WHITE))
             setOnClickListener { action() }
         }
+        addLeadingIcon(row, iconRes)
         val text = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         text.addView(TextView(this).apply { this.text = title; textSize = 16f; setTextColor(palette.text) })
         val subtitleView = TextView(this).apply { this.text = subtitle; textSize = 13f; setTextColor(muted) }
@@ -311,7 +309,47 @@ class SettingsActivity : Activity() {
             importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }, LinearLayout.LayoutParams(dp(20), dp(20)).apply { marginStart = dp(8) })
         body.addView(row)
-        body.addView(android.view.View(this).apply { setBackgroundColor(palette.border) }, LinearLayout.LayoutParams(-1, dp(1)))
+        addRowDivider()
         return subtitleView
+    }
+
+    private fun addLeadingIcon(row: LinearLayout, iconRes: Int) {
+        row.addView(ImageView(this).apply {
+            setImageResource(iconRes)
+            setColorFilter(accent)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(dp(22), dp(22)).apply { marginEnd = dp(12) })
+    }
+
+    private fun addRowDivider() {
+        body.addView(View(this).apply { setBackgroundColor(palette.border) },
+            LinearLayout.LayoutParams(-1, dp(1)).apply { marginStart = dp(34) })
+    }
+
+    private fun switchItem(iconRes: Int, title: String, checked: Boolean, change: (Boolean) -> Unit) {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = dp(56)
+        }
+        addLeadingIcon(row, iconRes)
+        val toggle = Switch(this).apply {
+            text = title
+            setTextColor(palette.text)
+            textSize = 14f
+            minHeight = dp(48)
+            setPadding(0, dp(10), 0, dp(10))
+            switchPadding = dp(12)
+            isChecked = checked
+            val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
+            thumbTintList = ColorStateList(states, intArrayOf(palette.accent, palette.muted))
+            trackTintList = ColorStateList(states, intArrayOf(palette.selected, palette.border))
+            setOnCheckedChangeListener { _, value -> change(value) }
+        }
+        row.addView(toggle, LinearLayout.LayoutParams(0, -2, 1f))
+        row.setOnClickListener { toggle.toggle() }
+        body.addView(row)
+        addRowDivider()
     }
 }
