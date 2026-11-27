@@ -18,13 +18,24 @@ class AppPaletteTest {
         return (maxOf(x, y) + 0.05) / (minOf(x, y) + 0.05)
     }
     @Test fun readableText() {
-        for (p in AppPalette.values()) {
+        for (p in AppPalette.legacyValues()) {
             for (background in listOf(p.bg, p.surface, p.highlight)) {
                 for (foreground in listOf(p.text, p.muted, p.accent, p.lab, p.practice)) {
                     assertTrue(p.title, contrast(foreground, background) >= 4.5)
                 }
             }
             assertTrue(p.title, contrast(p.onSelected, p.selected) >= 4.5)
+            assertTrue(p.minContrast() >= 4.5)
+            org.junit.Assert.assertEquals(p, AppPalette.decode(p.encode()))
         }
+    }
+    @Test fun opacityBlendsAgainstBackground() {
+        org.junit.Assert.assertEquals(AppPalette.BLACK, AppPalette.blend(AppPalette.WHITE, AppPalette.BLACK, 0))
+        org.junit.Assert.assertEquals(AppPalette.WHITE, AppPalette.blend(AppPalette.WHITE, AppPalette.BLACK, 100))
+        org.junit.Assert.assertEquals(0xFF808080.toInt(), AppPalette.blend(AppPalette.WHITE, AppPalette.BLACK, 50))
+    }
+    @Test fun unreadablePaletteRejected() {
+        val p = AppPalette.defaults().copy(text = AppPalette.defaults().bg)
+        assertTrue(p.minContrast() < 4.5)
     }
 }

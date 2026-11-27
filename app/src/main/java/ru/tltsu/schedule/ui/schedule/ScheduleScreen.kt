@@ -111,7 +111,7 @@ internal class ScheduleScreen(
                     else -> "Расписание не загружено"
                 }
                 lessonContent.addView(column().apply {
-                    background = rounded(surface, 14)
+                    background = rounded(surface, palette.radius).apply { if (palette.showBorders) setStroke(dp(1), palette.border) }
                     setPadding(dp(16), dp(20), dp(16), dp(20))
                     addView(label(message, 16f, palette.text, true))
                     gap(5)
@@ -179,7 +179,7 @@ internal class ScheduleScreen(
                 gravity = Gravity.CENTER
                 setPadding(0, dp(5), 0, dp(5))
                 minimumHeight = dp(60)
-                background = ripple(if (selected) palette.selected else surface, 10, if (isToday) accent else null)
+                background = ripple(if (selected) palette.selected else surface, palette.radius, if (isToday) accent else if (palette.showBorders) palette.border else null)
                 isSelected = selected
                 contentDescription = date.format(dayFmt) + ", " + lessonCount(count) + if (isToday) ", сегодня" else ""
                 setOnClickListener { onDate(date, true) }
@@ -203,7 +203,7 @@ internal class ScheduleScreen(
 
     private fun nextCard(lesson: Lesson, now: Long): LinearLayout {
         val banner = column().apply {
-            background = rounded(palette.highlight)
+            background = rounded(palette.highlight, palette.radius).apply { if (palette.showBorders) setStroke(dp(1), palette.border) }
             setPadding(dp(14), dp(12), dp(14), dp(12))
         }
         val title = when {
@@ -232,7 +232,7 @@ internal class ScheduleScreen(
         val empty = row().apply {
             minimumHeight = dp(32)
             setPadding(dp(10), dp(5), dp(10), dp(5))
-            background = rounded(bg, 10).apply {
+            background = rounded(bg, palette.radius).apply {
                 setStroke(dp(1), palette.border, dp(4).toFloat(), dp(3).toFloat())
             }
             contentDescription = "$number-я пара: нет занятия"
@@ -246,7 +246,7 @@ internal class ScheduleScreen(
         val active = lesson.begins() <= now && lesson.ends() > now
         val past = lesson.ends() <= now
         val typeColor = when (lesson.type) {
-            "Лекция" -> accent
+            "Лекция" -> palette.lecture
             "Лабораторная" -> palette.lab
             else -> palette.practice
         }
@@ -262,8 +262,8 @@ internal class ScheduleScreen(
         if (!compactLayout) line.addView(times, LinearLayout.LayoutParams(dp(57), -2))
         val card = row().apply {
             gravity = Gravity.CENTER_VERTICAL
-            background = rounded(if (active) palette.highlight else surface, 14).apply {
-                if (active) setStroke(dp(1), accent)
+            background = rounded(if (active) palette.highlight else surface, palette.radius).apply {
+                if (active || palette.showBorders) setStroke(dp(1), if (active) accent else palette.border)
             }
             setPadding(dp(if (compactLayout) 8 else 9), dp(if (compactLayout) 7 else 11), dp(if (compactLayout) 10 else 12), dp(if (compactLayout) 7 else 11))
         }
@@ -341,7 +341,7 @@ internal class ScheduleScreen(
             setPadding(dp(if (compactLayout) 6 else 12), dp(if (compactLayout) 4 else 10), dp(if (compactLayout) 6 else 12), dp(if (compactLayout) 4 else 10))
             stateListAnimator = null
             backgroundTintList = null
-            val shape = rounded(if (active) palette.selected else surface, 12).apply {
+            val shape = rounded(if (active) palette.selected else surface, palette.radius).apply {
                 setStroke(dp(1), if (active) accent else palette.border)
             }
             background = android.graphics.drawable.RippleDrawable(

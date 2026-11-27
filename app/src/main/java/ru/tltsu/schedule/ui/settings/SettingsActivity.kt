@@ -131,7 +131,7 @@ class SettingsActivity : Activity() {
             android.widget.Toast.makeText(this, "Напоминания перепланированы", android.widget.Toast.LENGTH_SHORT).show()
         }
         section("ОФОРМЛЕНИЕ")
-        item("Цветовая тема", palette.title) { choosePalette() }
+        item("Настройка цветов и оформления", palette.title) { choosePalette() }
         item("Масштаб текста", InterfaceSize.current(this).title) { chooseInterfaceSize() }
         section("ПРИЛОЖЕНИЕ")
         item("Проверить обновления", "Версия " + UpdateManager.installed(this)) { UpdateManager.check(this, true) }
@@ -143,55 +143,10 @@ class SettingsActivity : Activity() {
     }
 
     private fun choosePalette() {
-        val options = AppPalette.values()
-        val list = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(8), dp(16), dp(8))
-        }
-        val scroller = ScrollView(this).apply {
-            isVerticalScrollBarEnabled = false
-            addView(list)
-        }
-        val dialog = AlertDialog.Builder(this).setTitle("Цветовая тема")
-            .setView(scroller).setNegativeButton("Отмена", null).create()
-        for (option in options) {
-            val tile = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(dp(12), dp(9), dp(12), dp(9))
-                background = android.graphics.drawable.GradientDrawable().apply {
-                    setColor(option.bg)
-                    cornerRadius = dp(12).toFloat()
-                    setStroke(dp(if (option == palette) 2 else 1), if (option == palette) option.accent else option.border)
-                }
-                contentDescription = option.title + if (option == palette) ", выбрана" else ""
-                isSelected = option == palette
-                setOnClickListener {
-                    dialog.dismiss()
-                    if (option != palette) {
-                        AppPalette.save(this@SettingsActivity, option)
-                        recreate()
-                    }
-                }
-            }
-            tile.addView(TextView(this).apply {
-                text = option.title + if (option == palette) " · Выбрана" else ""
-                textSize = 15f
-                setTextColor(option.text)
-                setTypeface(null, android.graphics.Typeface.BOLD)
-            })
-            tile.addView(TextView(this).apply {
-                text = "2-я пара · УЛК-203"
-                textSize = 13f
-                setTextColor(option.accent)
-                setPadding(dp(8), dp(6), dp(8), dp(6))
-                background = android.graphics.drawable.GradientDrawable().apply {
-                    setColor(option.surface)
-                    cornerRadius = dp(8).toFloat()
-                }
-            })
-            list.addView(tile, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) })
-        }
-        dialog.show()
+        PaletteEditor(this, palette) { selected ->
+            AppPalette.save(this, selected)
+            recreate()
+        }.show()
     }
 
     private fun chooseEndLead() {
