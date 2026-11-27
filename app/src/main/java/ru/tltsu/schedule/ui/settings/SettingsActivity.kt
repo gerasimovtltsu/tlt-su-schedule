@@ -150,6 +150,7 @@ class SettingsActivity : Activity() {
         }
         section("ОФОРМЛЕНИЕ")
         item(R.drawable.ic_pref_palette, "Настройка цветов и оформления", palette.title) { choosePalette() }
+        item(R.drawable.ic_pref_app_icon, "Иконка приложения", "Автоцвета Android и собственный ярлык") { LauncherIconSettings.show(this) }
         item(R.drawable.ic_pref_text, "Масштаб текста", InterfaceSize.current(this).title) { chooseInterfaceSize() }
         section("ПРИЛОЖЕНИЕ")
         item(R.drawable.ic_pref_update, "Проверить обновления", "Версия " + UpdateManager.installed(this)) { UpdateManager.check(this, true) }
@@ -163,6 +164,7 @@ class SettingsActivity : Activity() {
     private fun choosePalette() {
         PaletteEditor(this, palette) { selected ->
             AppPalette.save(this, selected)
+            LauncherIconSettings.refreshPaletteShortcut(this)
             recreate()
         }.show()
     }
