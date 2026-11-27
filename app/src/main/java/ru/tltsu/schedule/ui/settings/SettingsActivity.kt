@@ -1,6 +1,8 @@
 package ru.tltsu.schedule.ui.settings
 
 import android.app.Activity
+import android.content.Context
+import ru.tltsu.schedule.ui.InterfaceSize
 import android.app.AlertDialog
 import android.app.NotificationManager
 import android.content.Intent
@@ -26,6 +28,10 @@ class SettingsActivity : Activity() {
     private val accent = Color.parseColor("#8EB5FF")
     private val muted = Color.parseColor("#B4C1D4")
     private fun dp(n: Int) = (n * resources.displayMetrics.density).toInt()
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(InterfaceSize.wrap(newBase))
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -99,6 +105,8 @@ class SettingsActivity : Activity() {
             android.widget.Toast.makeText(this, "Напоминания перепланированы", android.widget.Toast.LENGTH_SHORT).show()
         }
         item("Фоновая работа", "Системные настройки приложения") { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))) }
+        section("ОФОРМЛЕНИЕ")
+        item("Размер интерфейса", InterfaceSize.current(this).title) { chooseInterfaceSize() }
         section("ПРИЛОЖЕНИЕ")
         item("Проверить обновления", "Версия " + UpdateManager.installed(this)) { UpdateManager.check(this, true) }
         item("О приложении", "Расписание ТГУ · GitHub") {
@@ -106,6 +114,22 @@ class SettingsActivity : Activity() {
                 .setPositiveButton("GitHub") { _, _ -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(GitHubReleaseApi.RELEASES))) }
                 .setNegativeButton("Закрыть", null).show()
         }
+    }
+
+    private fun chooseInterfaceSize() {
+        val options = InterfaceSize.values()
+        AlertDialog.Builder(this)
+            .setTitle("Размер интерфейса")
+            .setSingleChoiceItems(options.map { it.title }.toTypedArray(), InterfaceSize.current(this).ordinal) { dialog, index ->
+                val selected = options[index]
+                dialog.dismiss()
+                if (selected != InterfaceSize.current(this)) {
+                    InterfaceSize.save(this, selected)
+                    recreate()
+                }
+            }
+            .setNegativeButton("Отмена", null)
+            .show()
     }
 
     private fun section(title: String) {

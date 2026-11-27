@@ -1,6 +1,8 @@
 package ru.tltsu.schedule
 
 import android.Manifest
+import android.content.Context
+import ru.tltsu.schedule.ui.InterfaceSize
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -20,6 +22,7 @@ import ru.tltsu.schedule.worker.ScheduleSync
 import ru.tltsu.schedule.update.UpdateManager
 
 class MainActivity : ComponentActivity() {
+    private lateinit var appliedSize: InterfaceSize
     private lateinit var model: ScheduleViewModel
     private lateinit var screen: ScheduleScreen
     private val handler = Handler(Looper.getMainLooper())
@@ -32,6 +35,11 @@ class MainActivity : ComponentActivity() {
             model.state.value?.takeUnless { it.loading }?.let(screen::render)
             handler.postDelayed(this, 60_000L)
         }
+    }
+
+    override fun attachBaseContext(newBase: Context) {
+        appliedSize = InterfaceSize.current(newBase)
+        super.attachBaseContext(InterfaceSize.wrap(newBase))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -65,6 +73,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (appliedSize != InterfaceSize.current(this)) {
+            recreate()
+            return
+        }
         ReminderScheduler.request(this)
         handler.removeCallbacks(ticker)
         handler.postDelayed(ticker, 60_000L)

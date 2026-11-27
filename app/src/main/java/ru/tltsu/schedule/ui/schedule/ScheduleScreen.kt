@@ -117,7 +117,7 @@ internal class ScheduleScreen(
             }
             for (lesson in day) {
                 lessonContent.addView(lessonCard(lesson, now))
-                lessonContent.gap(10)
+                lessonContent.gap(if (compactLayout) 7 else 10)
             }
             lessonContent.gap(8)
         }
@@ -240,26 +240,33 @@ internal class ScheduleScreen(
             background = rounded(if (active) Color.parseColor("#233A5C") else surface, 14).apply {
                 if (active) setStroke(dp(1), accent)
             }
-            setPadding(dp(9), dp(11), dp(12), dp(11))
+            setPadding(dp(if (compactLayout) 8 else 9), dp(if (compactLayout) 7 else 11), dp(if (compactLayout) 10 else 12), dp(if (compactLayout) 7 else 11))
         }
-        card.addView(View(context).apply { background = rounded(typeColor, 3) }, LinearLayout.LayoutParams(dp(3), dp(44)).apply { marginEnd = dp(10) })
+        card.addView(View(context).apply { background = rounded(typeColor, 3) }, LinearLayout.LayoutParams(dp(3), dp(44)).apply { marginEnd = dp(if (compactLayout) 7 else 10) })
         val details = column()
         if (compactLayout) {
-            details.addView(label((if (lesson.number > 0) "${lesson.number}-я пара · " else "") + lesson.time(), 14f, muted, true))
-            details.gap(4)
+            details.addView(label((if (lesson.number > 0) "${lesson.number}-я пара · " else "") + lesson.time() + if (active) " · Сейчас" else "", 12f, if (active) accent else muted))
+            details.gap(3)
         }
-        if (active) {
+        if (active && !compactLayout) {
             details.addView(label("ИДЁТ СЕЙЧАС", 11f, accent, true))
             details.gap(4)
         }
-        details.addView(label(lesson.name, 16f, Color.WHITE, true).apply { setLineSpacing(dp(2).toFloat(), 1f) })
-        details.gap(6)
+        details.addView(label(lesson.name, if (compactLayout) 15f else 16f, Color.WHITE, true).apply { setLineSpacing(dp(if (compactLayout) 0 else 2).toFloat(), 1f) })
+        details.gap(if (compactLayout) 3 else 6)
         details.addView(label(lesson.room.ifBlank { "Аудитория не указана" }, 15f, Color.WHITE, true))
-        details.gap(4)
-        details.addView(label(lesson.type, 13f, typeColor, true))
-        if (lesson.groups.isNotBlank()) {
-            details.gap(3)
-            details.addView(label(lesson.groups, 13f, muted))
+        details.gap(if (compactLayout) 2 else 4)
+        if (compactLayout) {
+            val combined = listOf(lesson.type, lesson.groups).filter { it.isNotBlank() }.joinToString(" · ")
+            val styled = android.text.SpannableString(combined)
+            if (lesson.type.isNotBlank()) styled.setSpan(android.text.style.ForegroundColorSpan(typeColor), 0, lesson.type.length, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            details.addView(label("", 12f, muted).apply { text = styled })
+        } else {
+            details.addView(label(lesson.type, 13f, typeColor, true))
+            if (lesson.groups.isNotBlank()) {
+                details.gap(3)
+                details.addView(label(lesson.groups, 13f, muted))
+            }
         }
         if (lesson.note.isNotBlank()) {
             details.gap(4)
@@ -291,7 +298,7 @@ internal class ScheduleScreen(
     private fun navigationButton(value: String, icon: Int, active: Boolean, action: () -> Unit) =
         android.widget.Button(context).apply {
             text = value
-            textSize = 15f
+            textSize = if (compactLayout) 13f else 15f
             isAllCaps = false
             isSelected = active
             setTypeface(null, Typeface.BOLD)
@@ -303,7 +310,7 @@ internal class ScheduleScreen(
             compoundDrawablePadding = dp(6)
             minHeight = dp(48)
             minimumHeight = dp(48)
-            setPadding(dp(if (compactLayout) 6 else 12), dp(10), dp(if (compactLayout) 6 else 12), dp(10))
+            setPadding(dp(if (compactLayout) 6 else 12), dp(if (compactLayout) 4 else 10), dp(if (compactLayout) 6 else 12), dp(if (compactLayout) 4 else 10))
             stateListAnimator = null
             backgroundTintList = null
             val shape = rounded(if (active) Color.parseColor("#315DA8") else surface, 12).apply {
