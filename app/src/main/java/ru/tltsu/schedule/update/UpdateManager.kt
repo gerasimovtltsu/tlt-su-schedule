@@ -48,11 +48,8 @@ internal object UpdateManager {
                         return@post
                     }
                     result.onSuccess { release ->
-                        if (ReleaseVersion.newer(release.version, installed(context))) {
-                            show(activity, release)
-                        } else if (manual) {
-                            Toast.makeText(activity, "Установлена актуальная версия", Toast.LENGTH_LONG).show()
-                        }
+                        val newer = ReleaseVersion.newer(release.version, installed(context))
+                        if (newer || manual) show(activity, release, newer)
                     }.onFailure {
                         if (manual) Toast.makeText(activity, "Не удалось проверить обновления GitHub", Toast.LENGTH_LONG).show()
                     }
@@ -92,19 +89,55 @@ internal object UpdateManager {
         return release
     }
 
-    private fun show(activity: Activity, release: AppRelease) {
-        val notes = release.notes.trim().take(2500).ifBlank { "Описание изменений доступно на GitHub." }
-        AlertDialog.Builder(activity)
-            .setTitle("Доступно обновление")
-            .setMessage("Установлено: " + installed(activity) + "\nНовая версия: " + release.version + "\n\nЧто нового:\n" + notes)
-            .setPositiveButton("Скачать APK") { _, _ ->
-                ApkDownloader.start(activity, release)
+    private fun show(activity: Activity, release: AppRelease, newer: Boolean) {
+        val notes = release.notes.trim().ifBlank { "Описание изменений для этого релиза не опубликовано." }
+        val palette = ru.tltsu.schedule.ui.AppPalette.current(activity)
+        fun dp(n: Int) = (n * activity.resources.displayMetrics.density).toInt()
+        val content = android.widget.LinearLayout(activity).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(dp(20), dp(12), dp(20), dp(16))
+        }
+        fun label(value: CharSequence, size: Float, color: Int, bold: Boolean = false) =
+            android.widget.TextView(activity).apply {
+                text = value
+                textSize = size
+                setTextColor(color)
+                if (bold) setTypeface(null, android.graphics.Typeface.BOLD)
             }
+        content.addView(label("Установлено: " + installed(activity), 14f, palette.muted))
+        content.addView(label("Последний релиз: " + release.version, 14f, palette.muted))
+        content.addView(label(release.tag, 12f, palette.muted))
+        content.addView(label("Что нового", 17f, palette.text, true).apply {
+            setPadding(0, dp(18), 0, dp(8))
+        })
+        // GitHub release notes are Markdown; preserve all text and paragraph breaks.
+        // Do not execute HTML or interpret remote content as a WebView page.
+        val readable = notes.lineSequence().joinToString("\n") { line ->
+            line.replace(Regex("^#{1,6}\\s+"), "")
+                .replace(Regex("^\\s*[-*]\\s+"), "• ")
+                .replace(Regex("\\*\\*([^*]+)\\*\\*"), "$1")
+        }
+        content.addView(label(readable, 14f, palette.text).apply {
+            setTextIsSelectable(true)
+            setLineSpacing(dp(3).toFloat(), 1f)
+        })
+        val dialog = AlertDialog.Builder(activity)
+            .setTitle(if (newer) "Доступно обновление" else "Установлена актуальная версия")
+            .setView(android.widget.ScrollView(activity).apply {
+                addView(content)
+                isVerticalScrollBarEnabled = true
+            })
             .setNeutralButton("GitHub") { _, _ ->
-                runCatching { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(GitHubReleaseApi.RELEASES))) }
+                runCatching { activity.startActivity(Intent(Intent.ACTION_VIEW,
+                    Uri.parse(GitHubReleaseApi.RELEASES + "/tag/" + Uri.encode(release.tag)))) }
             }
-            .setNegativeButton("Позже", null)
-            .show()
+        if (newer) {
+            dialog.setPositiveButton("Скачать APK") { _, _ -> ApkDownloader.start(activity, release) }
+                .setNegativeButton("Позже", null)
+        } else {
+            dialog.setPositiveButton("Закрыть", null)
+        }
+        dialog.show()
     }
 
     private fun notifyIfNew(context: Context, release: AppRelease) {
