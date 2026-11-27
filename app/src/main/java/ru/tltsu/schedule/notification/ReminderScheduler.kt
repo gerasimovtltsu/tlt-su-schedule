@@ -36,9 +36,12 @@ internal object ReminderScheduler {
     private fun intent(context: Context, id: String): Intent =
         Intent(context, ReminderReceiver::class.java).setData(Uri.parse("schedule://reminder/$id"))
 
-    private fun cancel(context: Context, id: String) {
+    private fun endIntent(context: Context, id: String): Intent =
+        Intent(context, ReminderReceiver::class.java).setData(Uri.Builder().scheme("schedule").authority("lesson-end").appendPath(id).build())
+
+    private fun cancel(context: Context, id: String, end: Boolean = false) {
         val pending = PendingIntent.getBroadcast(
-            context, 0, intent(context, id),
+            context, 0, if (end) endIntent(context, id) else intent(context, id),
             PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
         ) ?: return
         context.getSystemService(AlarmManager::class.java).cancel(pending)
@@ -49,7 +52,8 @@ internal object ReminderScheduler {
     fun cancelAll(context: Context) {
         val storage = prefs(context)
         storage.getStringSet("alarm_ids", emptySet()).orEmpty().toSet().forEach { cancel(context, it) }
-        storage.edit().remove("alarm_ids").remove("planned_list").apply()
+        storage.getStringSet("end_alarm_ids", emptySet()).orEmpty().toSet().forEach { cancel(context, it, true) }
+        storage.edit().remove("alarm_ids").remove("end_alarm_ids").remove("planned_list").apply()
     }
 
     /** Rebuild alarms from current and next week without changing their identity or channel. */
@@ -59,7 +63,8 @@ internal object ReminderScheduler {
         val manager = context.getSystemService(AlarmManager::class.java)
         val now = System.currentTimeMillis()
         val lead = storage.getInt("lead", 15)
-        val desired = ScheduleRepository.upcoming(context)
+        val upcoming = ScheduleRepository.upcoming(context)
+        val desired = upcoming
             .filter { it.begins() > now }
             .associateBy { it.id }
         val previous = storage.getStringSet("alarm_ids", emptySet()).orEmpty().toSet()
@@ -90,7 +95,37 @@ internal object ReminderScheduler {
             }
             planned += fireAt to lesson.name
         }
-        storage.edit()
+        val endDesired = if (storage.getBoolean("notify_lesson_end", false))
+            upcoming.filter { it.ends() > now && it.ends() > it.begins() }.associateBy { it.id }
+        else emptyMap()
+        val previousEnds = storage.getStringSet("end_alarm_ids", emptySet()).orEmpty().toSet()
+        (previousEnds - endDesired.keys).forEach { cancel(context, it, true) }
+        for ((id, lesson) in endDesired) {
+            val endAt = lesson.ends()
+            if (storage.getLong("end_sent_$id", 0) == endAt) {
+                cancel(context, id, true)
+                continue
+            }
+            val reminder = endIntent(context, id)
+                .putExtra("end", endAt)
+                .putExtra("teacher_id", ru.tltsu.schedule.data.local.teacher(context))
+            val pending = PendingIntent.getBroadcast(context, 0, reminder, FLAGS)
+            try {
+                if (exactAllowed(context)) {
+                    manager.setAlarmClock(AlarmManager.AlarmClockInfo(endAt, NotificationHelper.openApp(context)), pending)
+                } else {
+                    manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, endAt, pending)
+                }
+            } catch (_: SecurityException) {
+                manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, endAt, pending)
+            }
+            planned += endAt to ("Окончание: " + lesson.name)
+        }
+        val edit = storage.edit()
+        storage.all.forEach { (key, value) ->
+            if (key.startsWith("end_sent_") && value is Long && value < now - 14 * 86_400_000L) edit.remove(key)
+        }
+        edit.putStringSet("end_alarm_ids", endDesired.keys.toSet())
             .putStringSet("alarm_ids", desired.keys.toSet())
             .putLong("planned_at", now)
             .putString("planned_list", planned.sortedBy { it.first }.joinToString("\n") {

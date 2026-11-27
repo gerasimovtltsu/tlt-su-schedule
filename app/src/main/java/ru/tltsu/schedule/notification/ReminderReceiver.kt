@@ -20,6 +20,10 @@ class ReminderReceiver : BroadcastReceiver() {
         val storage = prefs(context)
         val stamp = Instant.ofEpochMilli(now).atZone(zone).toString()
         storage.edit().putString("last_alarm_event", "$stamp · " + intent.data).apply()
+        if (intent.data?.host == "lesson-end") {
+            handleEnd(context, intent, now)
+            return
+        }
         if (now >= start) return
 
         val lesson = if (!test) {
@@ -47,6 +51,25 @@ class ReminderReceiver : BroadcastReceiver() {
             storage.edit().putLong("sent_$id", start)
                 .putString("last_lesson_alert", "$stamp · $name")
                 .apply()
+        }
+    }
+
+    private fun handleEnd(context: Context, intent: Intent, now: Long) {
+        val storage = prefs(context)
+        if (!storage.getBoolean("notify_lesson_end", false)) return
+        if (intent.getIntExtra("teacher_id", -1) != ru.tltsu.schedule.data.local.teacher(context)) return
+        val id = intent.data?.lastPathSegment ?: return
+        val endAt = intent.getLongExtra("end", 0)
+        if (endAt <= 0 || now < endAt || now - endAt > 10 * 60_000L) return
+        val lesson = ScheduleRepository.upcoming(context)
+            .firstOrNull { it.id == id && it.ends() == endAt } ?: return
+        if (storage.getLong("end_sent_$id", 0) == endAt) return
+        val title = if (lesson.number > 0) "${lesson.number}-я пара окончена · ${lesson.end}" else "Пара окончена · ${lesson.end}"
+        val expanded = listOf(lesson.name, lesson.time() + " · " + lesson.room, lesson.type, lesson.groups)
+            .filter { it.isNotBlank() }.joinToString("\n")
+        if (NotificationHelper.send(context, intent.data.toString().hashCode(), title, lesson.name, expanded,
+                NotificationHelper.END_CHANNEL_ID)) {
+            storage.edit().putLong("end_sent_$id", endAt).apply()
         }
     }
 }

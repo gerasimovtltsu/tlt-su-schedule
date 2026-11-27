@@ -87,6 +87,19 @@ class SettingsActivity : Activity() {
         section("УВЕДОМЛЕНИЯ")
         item("Напоминания о парах", "За ${prefs(this).getInt("lead", 15)} мин.") { actions.chooseLead(prefs(this).getInt("lead", 15)) }
         body.addView(Switch(this).apply {
+            text = "Уведомлять об окончании пары"
+            setTextColor(Color.WHITE)
+            setPadding(0, dp(12), 0, dp(12))
+            isChecked = prefs(this@SettingsActivity).getBoolean("notify_lesson_end", false)
+            setOnCheckedChangeListener { _, checked ->
+                val activity = this@SettingsActivity
+                prefs(activity).edit().putBoolean("notify_lesson_end", checked).apply()
+                if (checked) ru.tltsu.schedule.notification.NotificationHelper.createChannel(
+                    activity, ru.tltsu.schedule.notification.NotificationHelper.END_CHANNEL_ID)
+                ReminderScheduler.request(activity)
+            }
+        })
+        body.addView(Switch(this).apply {
             text = "Сообщать об изменениях расписания"
             setTextColor(Color.WHITE)
             setPadding(0, dp(12), 0, dp(12))

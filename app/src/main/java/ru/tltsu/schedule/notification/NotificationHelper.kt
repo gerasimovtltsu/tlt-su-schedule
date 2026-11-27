@@ -14,6 +14,7 @@ import ru.tltsu.schedule.R
 
 internal object NotificationHelper {
     const val CHANNEL_ID = "lessons_v2"
+    const val END_CHANNEL_ID = "lesson_end_v1"
 
     fun openApp(context: Context): PendingIntent =
         PendingIntent.getActivity(
@@ -21,9 +22,9 @@ internal object NotificationHelper {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-    fun createChannel(context: Context) {
+    fun createChannel(context: Context, channelId: String = CHANNEL_ID) {
         val channel = NotificationChannel(
-            CHANNEL_ID, "Напоминания о парах", NotificationManager.IMPORTANCE_HIGH
+            channelId, if (channelId == END_CHANNEL_ID) "Окончание пары" else "Напоминания о парах", NotificationManager.IMPORTANCE_HIGH
         ).apply {
             enableVibration(true)
             vibrationPattern = longArrayOf(0, 250, 150, 250)
@@ -31,17 +32,17 @@ internal object NotificationHelper {
         context.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
-    fun send(context: Context, id: Int, title: String, detail: String, expanded: String = detail): Boolean {
+    fun send(context: Context, id: Int, title: String, detail: String, expanded: String = detail, channelId: String = CHANNEL_ID): Boolean {
         if (Build.VERSION.SDK_INT >= 33 &&
             context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) return false
-        createChannel(context)
+        createChannel(context, channelId)
         val manager = context.getSystemService(NotificationManager::class.java)
         if (!manager.areNotificationsEnabled()) return false
-        if (manager.getNotificationChannel(CHANNEL_ID)?.importance == NotificationManager.IMPORTANCE_NONE) {
+        if (manager.getNotificationChannel(channelId)?.importance == NotificationManager.IMPORTANCE_NONE) {
             return false
         }
-        val notification = Notification.Builder(context, CHANNEL_ID)
+        val notification = Notification.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(detail)
