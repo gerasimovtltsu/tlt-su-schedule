@@ -31,7 +31,7 @@ internal object NotificationHelper {
         context.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
-    fun send(context: Context, id: Int, title: String, detail: String): Boolean {
+    fun send(context: Context, id: Int, title: String, detail: String, expanded: String = detail): Boolean {
         if (Build.VERSION.SDK_INT >= 33 &&
             context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) return false
@@ -45,7 +45,9 @@ internal object NotificationHelper {
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(detail)
-            .setStyle(Notification.BigTextStyle().bigText(detail))
+            .setStyle(Notification.BigTextStyle().setBigContentTitle(title).bigText(expanded))
+            .setCategory(Notification.CATEGORY_REMINDER)
+            .setVisibility(Notification.VISIBILITY_PRIVATE)
             .setContentIntent(openApp(context))
             .setAutoCancel(true)
             .build()

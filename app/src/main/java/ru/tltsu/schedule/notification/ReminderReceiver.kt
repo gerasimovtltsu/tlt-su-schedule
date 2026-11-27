@@ -22,7 +22,7 @@ class ReminderReceiver : BroadcastReceiver() {
         storage.edit().putString("last_alarm_event", "$stamp · " + intent.data).apply()
         if (now >= start) return
 
-        if (!test) {
+        val lesson = if (!test) {
             if (id == null) return
             val lesson = ScheduleRepository.upcoming(context)
                 .firstOrNull { it.id == id && it.begins() == start } ?: return
@@ -31,13 +31,17 @@ class ReminderReceiver : BroadcastReceiver() {
                 return
             }
             if (storage.getLong("sent_$id", 0) == start) return
-        }
+            lesson
+        } else null
 
-        val name = intent.getStringExtra("name").orEmpty()
+        val name = lesson?.name ?: intent.getStringExtra("name").orEmpty()
         val detail = intent.getStringExtra("detail").orEmpty()
+        val title = if (lesson != null) "Скоро пара · " + lesson.start + " · " + lesson.room else name
+        val compact = if (lesson != null) lesson.name else detail
+        val expanded = if (lesson != null) listOf(lesson.name, lesson.time() + " · " + lesson.room, lesson.type, lesson.groups).filter { it.isNotBlank() }.joinToString("\n") else detail
         val sent = NotificationHelper.send(
             context, intent.data.toString().hashCode(),
-            if (test) name else "Скоро пара: $name", detail
+            title, compact, expanded
         )
         if (sent && !test && id != null) {
             storage.edit().putLong("sent_$id", start)
