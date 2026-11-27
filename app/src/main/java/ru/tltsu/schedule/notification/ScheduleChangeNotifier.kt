@@ -10,7 +10,7 @@ import ru.tltsu.schedule.data.local.prefs
 internal object ScheduleChangeNotifier {
     private const val CHANNEL = "schedule_changes"
 
-    fun send(context: Context, changes: List<String>) {
+    fun send(context: Context, teacherId: Int, week: java.time.LocalDate, changes: List<String>) {
         if (changes.isEmpty() || !prefs(context).getBoolean("notify_changes", true)) return
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(NotificationChannel(CHANNEL, "Изменения расписания", NotificationManager.IMPORTANCE_HIGH))
@@ -24,6 +24,6 @@ internal object ScheduleChangeNotifier {
             .setContentIntent(NotificationHelper.openApp(context))
             .setAutoCancel(true)
             .build()
-        runCatching { manager.notify(1802, notification) }
+        runCatching { manager.notify("changes:$teacherId:$week", 1802, notification) }
     }
 }

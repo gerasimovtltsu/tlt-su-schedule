@@ -42,6 +42,7 @@ internal object UpdateManager {
             try {
                 val result = runCatching { load(context) }
                 main.post {
+                    try {
                     if (activity.isFinishing || activity.isDestroyed) {
                         result.getOrNull()?.let { notifyIfNew(context, it) }
                         return@post
@@ -55,11 +56,18 @@ internal object UpdateManager {
                     }.onFailure {
                         if (manual) Toast.makeText(activity, "Не удалось проверить обновления GitHub", Toast.LENGTH_LONG).show()
                     }
+                    } finally { running.set(false) }
                 }
-            } finally {
+            } catch (e: Exception) {
                 running.set(false)
+                android.util.Log.w("UpdateManager", "Update check failed", e)
             }
         }
+    }
+
+    fun enqueueBackground(context: Context) {
+        val app = context.applicationContext
+        executor.execute { checkInBackground(app) }
     }
 
     /** Called by the existing periodic schedule job; no additional background service. */

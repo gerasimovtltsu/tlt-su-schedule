@@ -13,6 +13,20 @@ import ru.tltsu.schedule.util.displayTimestamp
 import ru.tltsu.schedule.util.reminderTime
 
 internal object ReminderScheduler {
+    private val planner = java.util.concurrent.Executors.newSingleThreadExecutor()
+
+    fun request(context: Context, reset: Boolean = false) {
+        val app = context.applicationContext
+        planner.execute {
+            try {
+                if (reset) cancelAll(app)
+                reschedule(app)
+            } catch (e: Exception) {
+                android.util.Log.w("ReminderScheduler", "Planning failed", e)
+            }
+        }
+    }
+
     private const val FLAGS = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
 
     fun exactAllowed(context: Context): Boolean =

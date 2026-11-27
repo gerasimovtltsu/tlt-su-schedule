@@ -63,7 +63,7 @@ internal class SettingsDialogs(
         AlertDialog.Builder(activity).setTitle("Напоминать до пары")
             .setSingleChoiceItems(values.map { "$it мин." }.toTypedArray(), values.indexOf(lead)) { dialog, index ->
                 prefs(activity).edit().putInt("lead", values[index]).apply()
-                ReminderScheduler.reschedule(activity)
+                ReminderScheduler.request(activity)
                 dialog.dismiss()
             }.setNegativeButton("Отмена", null).show()
     }

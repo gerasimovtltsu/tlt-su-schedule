@@ -26,7 +26,8 @@ internal class ScheduleViewModel(application: Application) : AndroidViewModel(ap
     private val mutableState = MutableLiveData(ScheduleState())
     val state: LiveData<ScheduleState> = mutableState
     private val current: ScheduleState get() = mutableState.value ?: ScheduleState()
-    private var generation = 0
+    @Volatile private var generation = 0
+    private var request: java.util.concurrent.Future<*>? = null
 
     fun selectDate(date: LocalDate, dayMode: Boolean = false) {
         mutableState.value = current.copy(date = date, allWeek = if (dayMode) false else current.allWeek)
@@ -40,10 +41,10 @@ internal class ScheduleViewModel(application: Application) : AndroidViewModel(ap
     fun changeTeacher(id: Int) {
         if (teacher(context) == id) return
         prefs(context).edit().putInt("teacher_id", id).apply()
-        ReminderScheduler.cancelAll(context)
-        context.getSystemService(NotificationManager::class.java).cancelAll()
-        ReminderScheduler.reschedule(context)
         generation++
+        request?.cancel(true)
+        context.getSystemService(NotificationManager::class.java).cancelAll()
+        ReminderScheduler.request(context, reset = true)
         mutableState.value = ScheduleState()
         refresh(true)
     }
@@ -54,15 +55,19 @@ internal class ScheduleViewModel(application: Application) : AndroidViewModel(ap
         val id = teacher(context)
         val token = ++generation
         mutableState.value = current.copy(loading = true, syncError = false)
-        ScheduleRepository.executor.execute {
-            val result = runCatching { ScheduleRepository.fetch(context, selectedWeek, id) }
-            if (includeUpcoming) {
+        request = ScheduleRepository.executor.submit {
+            val valid = { token == generation && !Thread.currentThread().isInterrupted && teacher(context) == id }
+            if (!valid()) return@submit
+            val result = runCatching { ScheduleRepository.fetch(context, selectedWeek, id, valid) }
+            if (includeUpcoming && valid()) {
                 val monday = week(today())
                 for (other in listOf(monday, monday.plusWeeks(1)).filter { it != selectedWeek }) {
-                    runCatching { ScheduleRepository.fetch(context, other, id) }
+                    if (!valid()) break
+                    runCatching { ScheduleRepository.fetch(context, other, id, valid) }
                 }
             }
-            ReminderScheduler.reschedule(context)
+            if (!valid()) return@submit
+            ReminderScheduler.request(context)
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 if (token == generation) {
                     mutableState.value = current.copy(loading = false, syncError = result.isFailure)
@@ -76,6 +81,7 @@ internal class ScheduleViewModel(application: Application) : AndroidViewModel(ap
 
     override fun onCleared() {
         generation++
+        request?.cancel(true)
         super.onCleared()
     }
 }

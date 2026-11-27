@@ -27,7 +27,7 @@ class ReminderReceiver : BroadcastReceiver() {
             val lesson = ScheduleRepository.upcoming(context)
                 .firstOrNull { it.id == id && it.begins() == start } ?: return
             if (now < lesson.begins() - storage.getInt("lead", 15) * 60_000L) {
-                ReminderScheduler.reschedule(context)
+                ReminderScheduler.request(context)
                 return
             }
             if (storage.getLong("sent_$id", 0) == start) return

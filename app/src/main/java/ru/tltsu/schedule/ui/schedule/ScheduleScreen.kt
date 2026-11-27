@@ -51,6 +51,13 @@ internal class ScheduleScreen(
 
     private var previousKey: String? = null
     private var previousScroll: ScrollView? = null
+    private var lessonArea: LinearLayout? = null
+
+    fun isLessonSwipeArea(x: Float, y: Float): Boolean {
+        val area = lessonArea ?: return false
+        val rect = android.graphics.Rect()
+        return area.getGlobalVisibleRect(rect) && rect.contains(x.toInt(), y.toInt())
+    }
 
     init {
         root.setBackgroundColor(bg)
@@ -79,33 +86,40 @@ internal class ScheduleScreen(
         scroll.post { scroll.scrollTo(0, scrollY) }
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
 
+        val lessonContent = column()
+        content.addView(lessonContent)
+        lessonArea = lessonContent
         val next = ScheduleRepository.upcoming(context).filter { it.ends() > now }.minByOrNull { it.begins() }
         if (next != null && (state.date == today() || (state.allWeek && monday == week(today())))) {
-            content.addView(nextCard(next, now))
-            content.gap(16)
+            lessonContent.addView(nextCard(next, now))
+            lessonContent.gap(16)
         }
 
         val dates = if (state.allWeek) (0..6).map { monday.plusDays(it.toLong()) } else listOf(state.date)
         for (date in dates) {
             val day = lessons.filter { it.date == date }.sortedBy { it.start }
-            content.addView(label(date.format(dayFmt).replaceFirstChar { it.uppercase(ru) } + " · " + lessonCount(day.size), 17f, Color.WHITE, true))
-            content.gap(8)
+            lessonContent.addView(label(date.format(dayFmt).replaceFirstChar { it.uppercase(ru) } + " · " + lessonCount(day.size), 17f, Color.WHITE, true))
+            lessonContent.gap(8)
             if (day.isEmpty()) {
-                val message = if (ScheduleCache.exists(context, id, monday)) "Занятий нет" else "Расписание не загружено"
-                content.addView(column().apply {
+                val message = when {
+                    ScheduleRepository.readCached(context, monday, id) != null -> "Занятий нет"
+                    ScheduleCache.exists(context, id, monday) -> "Не удалось прочитать расписание"
+                    else -> "Расписание не загружено"
+                }
+                lessonContent.addView(column().apply {
                     background = rounded(surface, 14)
                     setPadding(dp(16), dp(20), dp(16), dp(20))
                     addView(label(message, 16f, Color.WHITE, true))
                     gap(5)
-                    addView(label(if (state.loading) "Получаем данные…" else if (ScheduleCache.exists(context, id, monday)) "На этот день пары не запланированы" else "Нажмите кнопку обновления", 13f, muted))
+                    addView(label(if (state.loading) "Получаем данные…" else if (ScheduleRepository.readCached(context, monday, id) != null) "На этот день пары не запланированы" else "Нажмите кнопку обновления", 13f, muted))
                 })
-                content.gap(16)
+                lessonContent.gap(16)
             }
             for (lesson in day) {
-                content.addView(lessonCard(lesson, now))
-                content.gap(10)
+                lessonContent.addView(lessonCard(lesson, now))
+                lessonContent.gap(10)
             }
-            content.gap(8)
+            lessonContent.gap(8)
         }
         renderBottom(state)
     }

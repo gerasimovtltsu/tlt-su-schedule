@@ -95,7 +95,7 @@ class SettingsActivity : Activity() {
         item("Тест будильника", "Через 30 секунд") { actions.test(true) }
         item("Диагностика", "Запланированные напоминания") { DiagnosticsDialog.show(this) }
         item("Перепланировать напоминания", "Пересчитать будильники") {
-            ReminderScheduler.reschedule(this)
+            ReminderScheduler.request(this)
             android.widget.Toast.makeText(this, "Напоминания перепланированы", android.widget.Toast.LENGTH_SHORT).show()
         }
         item("Фоновая работа", "Системные настройки приложения") { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))) }

@@ -26,6 +26,7 @@ class MainActivity : ComponentActivity() {
     private var downX = 0f
     private var downY = 0f
     private var downTime = 0L
+    private var swipeAllowed = false
     private val ticker = object : Runnable {
         override fun run() {
             model.state.value?.takeUnless { it.loading }?.let(screen::render)
@@ -64,7 +65,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        ReminderScheduler.reschedule(this)
+        ReminderScheduler.request(this)
         handler.removeCallbacks(ticker)
         handler.postDelayed(ticker, 60_000L)
     }
@@ -79,10 +80,11 @@ class MainActivity : ComponentActivity() {
             downX = event.x
             downY = event.y
             downTime = event.eventTime
+            swipeAllowed = ::screen.isInitialized && screen.isLessonSwipeArea(event.rawX, event.rawY)
         }
         val state = if (::model.isInitialized) model.state.value else null
         val density = resources.displayMetrics.density
-        if (event.actionMasked == MotionEvent.ACTION_UP && state != null && !state.allWeek &&
+        if (event.actionMasked == MotionEvent.ACTION_UP && swipeAllowed && state != null && !state.allWeek &&
             abs(event.x - downX) > 90 * density &&
             abs(event.y - downY) < 55 * density &&
             event.eventTime - downTime < 700

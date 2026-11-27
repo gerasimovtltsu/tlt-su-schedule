@@ -15,6 +15,7 @@ import java.util.concurrent.Executors
 
 internal object ApkDownloader {
     private val executor = Executors.newSingleThreadExecutor()
+    private val running = java.util.concurrent.atomic.AtomicBoolean(false)
 
     fun start(activity: Activity, release: AppRelease) {
         if (!activity.packageManager.canRequestPackageInstalls()) {
@@ -26,13 +27,19 @@ internal object ApkDownloader {
                 }.setNegativeButton("Отмена", null).show()
             return
         }
+        if (!running.compareAndSet(false, true)) {
+            Toast.makeText(activity, "Обновление уже скачивается", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val cancelled = java.util.concurrent.atomic.AtomicBoolean(false)
         val progress = ProgressBar(activity, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 100
             isIndeterminate = true
             setPadding(24, 24, 24, 24)
         }
         val dialog = AlertDialog.Builder(activity).setTitle("Скачивание обновления")
-            .setView(progress).setCancelable(false).create()
+            .setView(progress).setNegativeButton("Отмена") { _, _ -> cancelled.set(true) }.setCancelable(true).create()
+        dialog.setOnCancelListener { cancelled.set(true) }
         dialog.show()
         executor.execute {
             val result = runCatching {
@@ -47,10 +54,12 @@ internal object ApkDownloader {
                     val total = connection.contentLengthLong
                     check(total <= 150_000_000L)
                     var count = 0L
+                    var lastPercent = -1
                     connection.inputStream.use { input ->
                         temporary.outputStream().use { output ->
                             val buffer = ByteArray(65536)
                             while (true) {
+                                check(!cancelled.get())
                                 val size = input.read(buffer)
                                 if (size < 0) break
                                 count += size
@@ -58,16 +67,26 @@ internal object ApkDownloader {
                                 output.write(buffer, 0, size)
                                 if (total > 0) {
                                     val percent = (count * 100 / total).toInt()
-                                    activity.runOnUiThread { progress.isIndeterminate = false; progress.progress = percent }
+                                    if (percent != lastPercent) {
+                                        lastPercent = percent
+                                        activity.runOnUiThread { if (!activity.isDestroyed && !cancelled.get()) { progress.isIndeterminate = false; progress.progress = percent } }
+                                    }
                                 }
                             }
                         }
                     }
+                    check(!cancelled.get())
                     check(total <= 0 || count == total)
                     @Suppress("DEPRECATION")
-                    val info = activity.packageManager.getPackageArchiveInfo(temporary.absolutePath, 0)
+                    val info = activity.packageManager.getPackageArchiveInfo(temporary.absolutePath, android.content.pm.PackageManager.GET_SIGNATURES)
                     check(info?.packageName == activity.packageName) { "Unexpected package" }
                     check(ReleaseVersion.newer(info?.versionName.orEmpty(), UpdateManager.installed(activity)))
+                    @Suppress("DEPRECATION")
+                    val installed = activity.packageManager.getPackageInfo(activity.packageName, android.content.pm.PackageManager.GET_SIGNATURES)
+                    @Suppress("DEPRECATION")
+                    check(info!!.signatures?.toSet() == installed.signatures?.toSet() && !installed.signatures.isNullOrEmpty()) { "Signature mismatch" }
+                    @Suppress("DEPRECATION")
+                    check(info.versionCode > installed.versionCode) { "Version code is not newer" }
                     check(temporary.renameTo(apk) || run { temporary.copyTo(apk, overwrite = true); temporary.delete(); true })
                     apk
                 } finally {
@@ -76,7 +95,8 @@ internal object ApkDownloader {
                 }
             }
             activity.runOnUiThread {
-                if (activity.isDestroyed || activity.isFinishing) return@runOnUiThread
+                running.set(false)
+                if (activity.isDestroyed || activity.isFinishing || cancelled.get()) return@runOnUiThread
                 dialog.dismiss()
                 result.onSuccess { apk ->
                     val uri = FileProvider.getUriForFile(activity, activity.packageName + ".updates", apk)
