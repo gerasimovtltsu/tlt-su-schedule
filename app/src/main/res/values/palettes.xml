@@ -109,4 +109,15 @@
         <item name="android:windowLightNavigationBar">true</item>
         <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
     </style>
+    <style name="Theme_LAVENDER_LIGHT" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:colorAccent">#69439A</item>
+        <item name="android:windowBackground">#F8F5FC</item>
+        <item name="android:statusBarColor">#F8F5FC</item>
+        <item name="android:navigationBarColor">#F8F5FC</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+    </style>
 </resources>

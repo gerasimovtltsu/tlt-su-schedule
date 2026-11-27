@@ -22,7 +22,8 @@ internal enum class AppPalette(
     PAPER("Бумага", true, 0xFFF5F7FA.toInt(), 0xFFFFFFFF.toInt(), 0xFF192532.toInt(), 0xFF46576B.toInt(), 0xFF174D9A.toInt(), 0xFF255AA8.toInt(), 0xFFE4ECFA.toInt(), 0xFF8193AA.toInt(), 0xFF08664B.toInt(), 0xFF854A00.toInt()),
     SAND("Песок", true, 0xFFF7F1E7.toInt(), 0xFFFFFBF4.toInt(), 0xFF30271F.toInt(), 0xFF655344.toInt(), 0xFF854410.toInt(), 0xFF8B4619.toInt(), 0xFFF1E3D0.toInt(), 0xFF9B8974.toInt(), 0xFF17634B.toInt(), 0xFF854400.toInt()),
     MINT("Мята", true, 0xFFEEF7F3.toInt(), 0xFFFFFFFF.toInt(), 0xFF19322A.toInt(), 0xFF455D53.toInt(), 0xFF075A47.toInt(), 0xFF17654F.toInt(), 0xFFDCEFE5.toInt(), 0xFF76968A.toInt(), 0xFF145F68.toInt(), 0xFF854A00.toInt()),
-    ROSE("Роза", true, 0xFFFAF1F4.toInt(), 0xFFFFFFFF.toInt(), 0xFF35232D.toInt(), 0xFF654D59.toInt(), 0xFF8A2455.toInt(), 0xFF9A3264.toInt(), 0xFFF3E0E9.toInt(), 0xFFA28A98.toInt(), 0xFF12664F.toInt(), 0xFF854600.toInt());
+    ROSE("Роза", true, 0xFFFAF1F4.toInt(), 0xFFFFFFFF.toInt(), 0xFF35232D.toInt(), 0xFF654D59.toInt(), 0xFF8A2455.toInt(), 0xFF9A3264.toInt(), 0xFFF3E0E9.toInt(), 0xFFA28A98.toInt(), 0xFF12664F.toInt(), 0xFF854600.toInt()),
+    LAVENDER_LIGHT("Лаванда светлая", true, 0xFFF8F5FC.toInt(), 0xFFFFFFFF.toInt(), 0xFF292238.toInt(), 0xFF5D526E.toInt(), 0xFF69439A.toInt(), 0xFF7149A8.toInt(), 0xFFEEE5FA.toInt(), 0xFF9484AF.toInt(), 0xFF14664F.toInt(), 0xFF854600.toInt());
     val onSelected: Int get() = 0xFFFFFFFF.toInt()
     val ripple: Int get() = if (light) 0x22000000 else 0x33FFFFFF
     val style: Int get() = when (this) {
@@ -36,6 +37,7 @@ internal enum class AppPalette(
         SAND -> R.style.Theme_SAND
         MINT -> R.style.Theme_MINT
         ROSE -> R.style.Theme_ROSE
+        LAVENDER_LIGHT -> R.style.Theme_LAVENDER_LIGHT
     }
 
     fun applyWindow(activity: Activity) {
