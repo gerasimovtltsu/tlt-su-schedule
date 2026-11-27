@@ -18,7 +18,8 @@ internal data class ScheduleState(
     val date: LocalDate = today(),
     val allWeek: Boolean = false,
     val loading: Boolean = false,
-    val syncError: Boolean = false
+    val syncError: Boolean = false,
+    val snapshot: ScheduleSnapshot? = null
 )
 
 internal class ScheduleViewModel(application: Application) : AndroidViewModel(application) {
@@ -28,9 +29,38 @@ internal class ScheduleViewModel(application: Application) : AndroidViewModel(ap
     private val current: ScheduleState get() = mutableState.value ?: ScheduleState()
     @Volatile private var generation = 0
     private var request: java.util.concurrent.Future<*>? = null
+    private val cacheExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private var cacheRequest: java.util.concurrent.Future<*>? = null
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private var cacheGeneration = 0
+
+    private fun loadSnapshot() {
+        val date = current.date
+        val id = teacher(context)
+        val token = ++cacheGeneration
+        cacheRequest?.cancel(true)
+        cacheRequest = cacheExecutor.submit {
+            android.os.Trace.beginSection("Schedule.cacheSnapshot")
+            val snapshot = try { ScheduleSnapshot.load(context, date, id) } finally { android.os.Trace.endSection() }
+            main.post {
+                if (token == cacheGeneration && teacher(context) == id && week(current.date) == week(date)) {
+                    mutableState.value = current.copy(snapshot = snapshot)
+                }
+            }
+        }
+    }
+
+    fun initialize(refreshNetwork: Boolean) {
+        if (!ru.tltsu.schedule.data.local.profileConfigured(context)) return
+        if (current.snapshot == null) loadSnapshot()
+        if (refreshNetwork) refresh(true)
+    }
 
     fun selectDate(date: LocalDate, dayMode: Boolean = false) {
-        mutableState.value = current.copy(date = date, allWeek = if (dayMode) false else current.allWeek)
+        val changedWeek = week(date) != week(current.date)
+        mutableState.value = current.copy(date = date, allWeek = if (dayMode) false else current.allWeek,
+            snapshot = if (changedWeek) null else current.snapshot)
+        if (changedWeek) loadSnapshot()
         if (!ScheduleCache.exists(context, teacher(context), week(date))) refresh()
     }
 
@@ -47,6 +77,7 @@ internal class ScheduleViewModel(application: Application) : AndroidViewModel(ap
         context.getSystemService(NotificationManager::class.java).cancelAll()
         ReminderScheduler.request(context, reset = true)
         mutableState.value = ScheduleState()
+        loadSnapshot()
         refresh(true)
     }
 
@@ -59,22 +90,30 @@ internal class ScheduleViewModel(application: Application) : AndroidViewModel(ap
         request = ScheduleRepository.executor.submit {
             val valid = { token == generation && !Thread.currentThread().isInterrupted && teacher(context) == id }
             if (!valid()) return@submit
-            val result = runCatching { ScheduleRepository.fetch(context, selectedWeek, id, valid) }
+            android.os.Trace.beginSection("Schedule.fetchVisibleWeek")
+            val result = try { runCatching { ScheduleRepository.fetch(context, selectedWeek, id, valid) } }
+                finally { android.os.Trace.endSection() }
+            if (!valid()) return@submit
+            main.post {
+                if (token == generation) {
+                    mutableState.value = current.copy(loading = false, syncError = result.isFailure)
+                    loadSnapshot()
+                    if (week(current.date) != selectedWeek &&
+                        !ScheduleCache.exists(context, id, week(current.date))) refresh()
+                }
+            }
+            ReminderScheduler.request(context)
             if (includeUpcoming && valid()) {
                 val monday = week(today())
                 for (other in listOf(monday, monday.plusWeeks(1)).filter { it != selectedWeek }) {
                     if (!valid()) break
-                    runCatching { ScheduleRepository.fetch(context, other, id, valid) }
+                    android.os.Trace.beginSection("Schedule.prefetchWeek")
+                    try { runCatching { ScheduleRepository.fetch(context, other, id, valid) } }
+                    finally { android.os.Trace.endSection() }
                 }
-            }
-            if (!valid()) return@submit
-            ReminderScheduler.request(context)
-            android.os.Handler(android.os.Looper.getMainLooper()).post {
-                if (token == generation) {
-                    mutableState.value = current.copy(loading = false, syncError = result.isFailure)
-                    if (week(current.date) != selectedWeek &&
-                        !ScheduleCache.exists(context, id, week(current.date))
-                    ) refresh()
+                if (valid()) {
+                    ReminderScheduler.request(context)
+                    main.post { if (token == generation) loadSnapshot() }
                 }
             }
         }
@@ -83,6 +122,9 @@ internal class ScheduleViewModel(application: Application) : AndroidViewModel(ap
     override fun onCleared() {
         generation++
         request?.cancel(true)
+        cacheGeneration++
+        cacheRequest?.cancel(true)
+        cacheExecutor.shutdownNow()
         super.onCleared()
     }
 }

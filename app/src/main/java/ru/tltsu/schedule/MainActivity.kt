@@ -32,6 +32,21 @@ class MainActivity : ComponentActivity() {
     private var downY = 0f
     private var downTime = 0L
     private var swipeAllowed = false
+    private var startupServicesStarted = false
+    private var fullyDrawnReported = false
+    private val deferredStartup = Runnable {
+        if (isFinishing || isDestroyed) return@Runnable
+        android.os.Trace.beginSection("Schedule.deferredStartup")
+        try {
+            NotificationHelper.createChannel(this)
+            ScheduleSync.schedule(this)
+            ReminderScheduler.request(this)
+            if (ru.tltsu.schedule.data.local.profileConfigured(this)) {
+                if (intent.getBooleanExtra("check_update", false)) UpdateManager.check(this, true)
+                else UpdateManager.enqueueBackground(applicationContext)
+            }
+        } finally { android.os.Trace.endSection() }
+    }
     private val ticker = object : Runnable {
         override fun run() {
             model.state.value?.takeUnless { it.loading }?.let(screen::render)
@@ -49,8 +64,6 @@ class MainActivity : ComponentActivity() {
         setTheme(appliedPalette.style)
         super.onCreate(savedInstanceState)
         appliedPalette.applyWindow(this)
-        NotificationHelper.createChannel(this)
-        ScheduleSync.schedule(this)
         setContentView(R.layout.activity_main)
         model = ViewModelProvider(this)[ScheduleViewModel::class.java]
         val dialogs = SettingsDialogs(this, model::changeTeacher)
@@ -59,16 +72,38 @@ class MainActivity : ComponentActivity() {
             model::selectDate, model::toggleWeek, { model.refresh(true) },
             dialogs::show, dialogs::chooseTeacher
         )
-        model.state.observe(this) { screen.render(it) }
+        model.state.observe(this) { state ->
+            screen.render(state)
+            if (!fullyDrawnReported && (state.snapshot?.lessons != null || state.syncError)) {
+                val root = findViewById<LinearLayout>(R.id.schedule_root)
+                root.post {
+                    if (!fullyDrawnReported && !isDestroyed && !isFinishing) {
+                        fullyDrawnReported = true
+                        reportFullyDrawn()
+                    }
+                }
+            }
+        }
+        val root = findViewById<LinearLayout>(R.id.schedule_root)
+        root.viewTreeObserver.addOnDrawListener(object : android.view.ViewTreeObserver.OnDrawListener {
+            override fun onDraw() {
+                if (startupServicesStarted) return
+                startupServicesStarted = true
+                root.post {
+                    if (root.viewTreeObserver.isAlive) root.viewTreeObserver.removeOnDrawListener(this)
+                    handler.postDelayed(deferredStartup, 250L)
+                }
+            }
+        })
         if (!ru.tltsu.schedule.data.local.profileConfigured(this)) {
             SettingsDialogs(this) { key ->
                 model.changeTeacher(key)
-                requestNotificationAccess()
+                handler.post { if (!isFinishing && !isDestroyed) requestNotificationAccess() }
             }.chooseProfile(true)
         } else {
-            requestNotificationAccess()
-            if (savedInstanceState == null) model.refresh(true)
-            UpdateManager.check(this, intent.getBooleanExtra("check_update", false))
+            model.initialize(savedInstanceState == null)
+            if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+                handler.postDelayed({ if (!isFinishing && !isDestroyed) requestNotificationAccess() }, 500L)
         }
     }
 
@@ -92,7 +127,7 @@ class MainActivity : ComponentActivity() {
             recreate()
             return
         }
-        ReminderScheduler.request(this)
+        if (startupServicesStarted) ReminderScheduler.request(this)
         handler.removeCallbacks(ticker)
         handler.postDelayed(ticker, 60_000L)
     }
@@ -100,6 +135,11 @@ class MainActivity : ComponentActivity() {
     override fun onPause() {
         handler.removeCallbacks(ticker)
         super.onPause()
+    }
+
+    override fun onDestroy() {
+        handler.removeCallbacksAndMessages(null)
+        super.onDestroy()
     }
 
     override fun dispatchTouchEvent(event: MotionEvent): Boolean {

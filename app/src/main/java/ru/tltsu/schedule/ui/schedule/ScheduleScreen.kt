@@ -22,7 +22,6 @@ import java.time.format.DateTimeFormatter
 import ru.tltsu.schedule.data.local.ScheduleCache
 import ru.tltsu.schedule.data.local.teacher
 import ru.tltsu.schedule.data.local.teacherName
-import ru.tltsu.schedule.data.repository.ScheduleRepository
 import ru.tltsu.schedule.domain.model.Lesson
 import ru.tltsu.schedule.domain.model.DaySlot
 import ru.tltsu.schedule.domain.model.daySlots
@@ -68,10 +67,26 @@ internal class ScheduleScreen(
         root.setPadding(dp(14), dp(5), dp(14), dp(4))
     }
 
+    private var lastState: ScheduleState? = null
+    private var lastMinute: Long = -1
+
     fun render(state: ScheduleState) {
+        val minute = System.currentTimeMillis() / 60_000L
+        if (state == lastState && minute == lastMinute) return
+        android.os.Trace.beginSection("Schedule.render")
+        try {
+            renderContent(state)
+            lastState = state
+            lastMinute = minute
+        } finally { android.os.Trace.endSection() }
+    }
+
+    private fun renderContent(state: ScheduleState) {
         val monday = week(state.date)
         val id = teacher(context)
-        val lessons = ScheduleRepository.cached(context, monday, id)
+        val snapshot = state.snapshot?.takeIf { it.profile == id && it.monday == monday }
+        val lessons = snapshot?.lessons.orEmpty()
+        val byDate = lessons.groupBy { it.date }
         val now = System.currentTimeMillis()
         val key = "$id/${state.date}/${state.allWeek}"
         val scrollY = if (key == previousKey) previousScroll?.scrollY ?: 0 else 0
@@ -93,7 +108,7 @@ internal class ScheduleScreen(
         val lessonContent = column()
         content.addView(lessonContent)
         lessonArea = lessonContent
-        val next = ScheduleRepository.upcoming(context).filter { it.ends() > now }.minByOrNull { it.begins() }
+        val next = snapshot?.upcoming?.asSequence()?.filter { it.ends() > now }?.minByOrNull { it.begins() }
         if (next != null && (state.date == today() || (state.allWeek && monday == week(today())))) {
             lessonContent.addView(nextCard(next, now))
             lessonContent.gap(16)
@@ -101,13 +116,14 @@ internal class ScheduleScreen(
 
         val dates = if (state.allWeek) (0..6).map { monday.plusDays(it.toLong()) } else listOf(state.date)
         for (date in dates) {
-            val day = lessons.filter { it.date == date }.sortedBy { it.start }
+            val day = byDate[date].orEmpty()
             lessonContent.addView(label(date.format(dayFmt).replaceFirstChar { it.uppercase(ru) } + " · " + lessonCount(day.size), 17f, palette.text, true))
             lessonContent.gap(8)
             if (day.isEmpty()) {
                 val message = when {
-                    ScheduleRepository.readCached(context, monday, id) != null -> "Занятий нет"
-                    ScheduleCache.exists(context, id, monday) -> "Не удалось прочитать расписание"
+                    snapshot?.lessons != null -> "Занятий нет"
+                    snapshot?.cacheExists == true -> "Не удалось прочитать расписание"
+                    snapshot == null && !state.syncError -> "Загрузка расписания…"
                     else -> "Расписание не загружено"
                 }
                 lessonContent.addView(column().apply {
@@ -115,7 +131,7 @@ internal class ScheduleScreen(
                     setPadding(dp(16), dp(20), dp(16), dp(20))
                     addView(label(message, 16f, palette.text, true))
                     gap(5)
-                    addView(label(if (state.loading) "Получаем данные…" else if (ScheduleRepository.readCached(context, monday, id) != null) "На этот день пары не запланированы" else "Нажмите кнопку обновления", 13f, muted))
+                    addView(label(if (state.loading || (snapshot == null && !state.syncError)) "Получаем данные…" else if (snapshot?.lessons != null) "На этот день пары не запланированы" else "Нажмите кнопку обновления", 13f, muted))
                 })
                 lessonContent.gap(16)
             }

@@ -33,7 +33,9 @@ internal object ScheduleRepository {
         val raw = ScheduleCache.read(context, teacherId, monday)
         synchronized(parsed) { parsed[key]?.takeIf { it.raw == raw }?.let { return it.lessons } }
         return try {
-            ScheduleParser.parse(raw).also { synchronized(parsed) { parsed[key] = CacheEntry(raw, it) } }
+            android.os.Trace.beginSection("Schedule.parseCache")
+            try { ScheduleParser.parse(raw).also { synchronized(parsed) { parsed[key] = CacheEntry(raw, it) } } }
+            finally { android.os.Trace.endSection() }
         } catch (e: Exception) {
             Log.w("ScheduleRepository", "Invalid cached week", e)
             null
