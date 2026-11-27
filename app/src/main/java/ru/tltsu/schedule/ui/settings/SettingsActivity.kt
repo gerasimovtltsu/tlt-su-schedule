@@ -106,7 +106,7 @@ class SettingsActivity : Activity() {
         }
         item("Фоновая работа", "Системные настройки приложения") { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))) }
         section("ОФОРМЛЕНИЕ")
-        item("Размер интерфейса", InterfaceSize.current(this).title) { chooseInterfaceSize() }
+        item("Масштаб текста", InterfaceSize.current(this).title) { chooseInterfaceSize() }
         section("ПРИЛОЖЕНИЕ")
         item("Проверить обновления", "Версия " + UpdateManager.installed(this)) { UpdateManager.check(this, true) }
         item("О приложении", "Расписание ТГУ · GitHub") {
@@ -117,16 +117,97 @@ class SettingsActivity : Activity() {
     }
 
     private fun chooseInterfaceSize() {
-        val options = InterfaceSize.values()
+        val current = InterfaceSize.current(this)
+        val systemScale = applicationContext.resources.configuration.fontScale
+        var selected = current.percent ?: (kotlin.math.round(systemScale * 100 / InterfaceSize.STEP).toInt() * InterfaceSize.STEP)
+            .coerceIn(InterfaceSize.MIN, InterfaceSize.MAX)
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(12), dp(20), dp(8))
+        }
+        val system = android.widget.CheckBox(this).apply {
+            text = "Использовать системный размер"
+            isChecked = current.percent == null
+        }
+        val value = TextView(this).apply {
+            gravity = Gravity.CENTER
+            setTextColor(accent)
+            textSize = 20f
+        }
+        val slider = android.widget.SeekBar(this).apply {
+            max = (InterfaceSize.MAX - InterfaceSize.MIN) / InterfaceSize.STEP
+            progress = (selected - InterfaceSize.MIN) / InterfaceSize.STEP
+            contentDescription = "Масштаб текста"
+            minimumHeight = dp(48)
+        }
+        val bounds = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(TextView(this@SettingsActivity).apply { text = "70%"; setTextColor(muted) }, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(TextView(this@SettingsActivity).apply { text = "150%"; setTextColor(muted); gravity = Gravity.END }, LinearLayout.LayoutParams(0, -2, 1f))
+        }
+        val preview = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(Color.parseColor("#1E293B"))
+                cornerRadius = dp(12).toFloat()
+            }
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+        }
+        val time = TextView(this).apply { text = "2-я пара · 10:15 – 11:45"; setTextColor(muted) }
+        val name = TextView(this).apply {
+            text = "Средства программной разработки"
+            setTextColor(Color.WHITE)
+            setTypeface(null, android.graphics.Typeface.BOLD)
+        }
+        val room = TextView(this).apply { text = "УЛК-203 · Практика"; setTextColor(accent) }
+        preview.addView(time)
+        preview.addView(name)
+        preview.addView(room)
+
+        fun updatePreview() {
+            slider.isEnabled = !system.isChecked
+            val factor = if (system.isChecked) systemScale else selected / 100f
+            value.text = if (system.isChecked) "Системный · ${kotlin.math.round(systemScale * 100).toInt()}%" else "$selected%"
+            val config = android.content.res.Configuration(resources.configuration).apply { fontScale = factor }
+            val metrics = createConfigurationContext(config).resources.displayMetrics
+            fun resize(view: TextView, sp: Float) {
+                view.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX,
+                    android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, sp, metrics))
+            }
+            resize(time, 12f)
+            resize(name, 16f)
+            resize(room, 14f)
+        }
+
+        system.setOnCheckedChangeListener { _, _ -> updatePreview() }
+        slider.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: android.widget.SeekBar, progress: Int, fromUser: Boolean) {
+                selected = InterfaceSize.MIN + progress * InterfaceSize.STEP
+                updatePreview()
+            }
+            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar) {}
+            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar) {}
+        })
+        content.addView(system)
+        content.addView(value)
+        content.addView(slider)
+        content.addView(bounds)
+        content.addView(preview, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+        updatePreview()
+        val scrollView = ScrollView(this).apply {
+            isVerticalScrollBarEnabled = false
+            addView(content)
+        }
         AlertDialog.Builder(this)
-            .setTitle("Размер интерфейса")
-            .setSingleChoiceItems(options.map { it.title }.toTypedArray(), InterfaceSize.current(this).ordinal) { dialog, index ->
-                val selected = options[index]
-                dialog.dismiss()
-                if (selected != InterfaceSize.current(this)) {
-                    InterfaceSize.save(this, selected)
-                    recreate()
-                }
+            .setTitle("Масштаб текста")
+            .setView(scrollView)
+            .setNeutralButton("100%") { _, _ ->
+                val size = InterfaceSize(100)
+                if (size != current) { InterfaceSize.save(this, size); recreate() }
+            }
+            .setPositiveButton("Применить") { _, _ ->
+                val size = InterfaceSize(if (system.isChecked) null else selected)
+                if (size != current) { InterfaceSize.save(this, size); recreate() }
             }
             .setNegativeButton("Отмена", null)
             .show()
