@@ -7,6 +7,7 @@ import java.time.Instant
 import ru.tltsu.schedule.data.local.prefs
 import ru.tltsu.schedule.data.repository.ScheduleRepository
 import ru.tltsu.schedule.notification.NotificationHelper
+import ru.tltsu.schedule.notification.EndReminderTiming
 import ru.tltsu.schedule.notification.ReminderScheduler
 import ru.tltsu.schedule.util.zone
 
@@ -60,11 +61,18 @@ class ReminderReceiver : BroadcastReceiver() {
         if (intent.getIntExtra("teacher_id", -1) != ru.tltsu.schedule.data.local.teacher(context)) return
         val id = intent.data?.lastPathSegment ?: return
         val endAt = intent.getLongExtra("end", 0)
-        if (endAt <= 0 || now < endAt || now - endAt > 10 * 60_000L) return
+        val lead = EndReminderTiming.normalize(storage.getInt("end_lead", 0))
+        if (endAt <= 0 || intent.getIntExtra("end_lead", 0) != lead) return
         val lesson = ScheduleRepository.upcoming(context)
             .firstOrNull { it.id == id && it.ends() == endAt } ?: return
+        if (!EndReminderTiming.eligible(now, lesson.begins(), endAt, lead)) return
         if (storage.getLong("end_sent_$id", 0) == endAt) return
-        val title = if (lesson.number > 0) "${lesson.number}-я пара окончена · ${lesson.end}" else "Пара окончена · ${lesson.end}"
+        val title = if (lead == 0) {
+            if (lesson.number > 0) "${lesson.number}-я пара окончена · ${lesson.end}" else "Пара окончена · ${lesson.end}"
+        } else {
+            val remaining = ((endAt - now + 59_999L) / 60_000L).coerceAtLeast(1L)
+            "До конца пары $remaining мин. · ${lesson.end}"
+        }
         val expanded = listOf(lesson.name, lesson.time() + " · " + lesson.room, lesson.type, lesson.groups)
             .filter { it.isNotBlank() }.joinToString("\n")
         if (NotificationHelper.send(context, intent.data.toString().hashCode(), title, lesson.name, expanded,

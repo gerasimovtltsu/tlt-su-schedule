@@ -95,6 +95,7 @@ internal object ReminderScheduler {
             }
             planned += fireAt to lesson.name
         }
+        val endLead = EndReminderTiming.normalize(storage.getInt("end_lead", 0))
         val endDesired = if (storage.getBoolean("notify_lesson_end", false))
             upcoming.filter { it.ends() > now && it.ends() > it.begins() }.associateBy { it.id }
         else emptyMap()
@@ -106,20 +107,23 @@ internal object ReminderScheduler {
                 cancel(context, id, true)
                 continue
             }
+            val target = EndReminderTiming.trigger(lesson.begins(), endAt, endLead)
+            val fireAt = maxOf(target, now + 1_000L)
             val reminder = endIntent(context, id)
                 .putExtra("end", endAt)
+                .putExtra("end_lead", endLead)
                 .putExtra("teacher_id", ru.tltsu.schedule.data.local.teacher(context))
             val pending = PendingIntent.getBroadcast(context, 0, reminder, FLAGS)
             try {
                 if (exactAllowed(context)) {
-                    manager.setAlarmClock(AlarmManager.AlarmClockInfo(endAt, NotificationHelper.openApp(context)), pending)
+                    manager.setAlarmClock(AlarmManager.AlarmClockInfo(fireAt, NotificationHelper.openApp(context)), pending)
                 } else {
-                    manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, endAt, pending)
+                    manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAt, pending)
                 }
             } catch (_: SecurityException) {
-                manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, endAt, pending)
+                manager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, fireAt, pending)
             }
-            planned += endAt to ("Окончание: " + lesson.name)
+            planned += fireAt to ("Окончание (" + EndReminderTiming.label(endLead) + "): " + lesson.name)
         }
         val edit = storage.edit()
         storage.all.forEach { (key, value) ->

@@ -19,6 +19,7 @@ import android.widget.TextView
 import ru.tltsu.schedule.data.local.prefs
 import ru.tltsu.schedule.data.local.teacherName
 import ru.tltsu.schedule.notification.ReminderScheduler
+import ru.tltsu.schedule.notification.EndReminderTiming
 import ru.tltsu.schedule.update.UpdateManager
 import ru.tltsu.schedule.update.GitHubReleaseApi
 
@@ -84,8 +85,8 @@ class SettingsActivity : Activity() {
         item("Автообновление расписания", "Примерно каждый час") {
             AlertDialog.Builder(this).setMessage("Android выполняет фоновое обновление примерно раз в час при наличии сети.").setPositiveButton("OK", null).show()
         }
-        section("УВЕДОМЛЕНИЯ")
-        item("Напоминания о парах", "За ${prefs(this).getInt("lead", 15)} мин.") { actions.chooseLead(prefs(this).getInt("lead", 15)) }
+        section("НАПОМИНАНИЯ О ПАРАХ")
+        item("До начала пары", "За ${prefs(this).getInt("lead", 15)} мин.") { actions.chooseLead(prefs(this).getInt("lead", 15)) }
         body.addView(Switch(this).apply {
             text = "Уведомлять об окончании пары"
             setTextColor(Color.WHITE)
@@ -97,8 +98,13 @@ class SettingsActivity : Activity() {
                 if (checked) ru.tltsu.schedule.notification.NotificationHelper.createChannel(
                     activity, ru.tltsu.schedule.notification.NotificationHelper.END_CHANNEL_ID)
                 ReminderScheduler.request(activity)
+                render()
             }
         })
+        if (prefs(this).getBoolean("notify_lesson_end", false)) {
+            item("Время оповещения об окончании", EndReminderTiming.label(EndReminderTiming.normalize(prefs(this).getInt("end_lead", 0)))) { chooseEndLead() }
+        }
+        section("ИЗМЕНЕНИЯ РАСПИСАНИЯ")
         body.addView(Switch(this).apply {
             text = "Сообщать об изменениях расписания"
             setTextColor(Color.WHITE)
@@ -106,10 +112,13 @@ class SettingsActivity : Activity() {
             isChecked = prefs(this@SettingsActivity).getBoolean("notify_changes", true)
             setOnCheckedChangeListener { _, checked -> prefs(this@SettingsActivity).edit().putBoolean("notify_changes", checked).apply() }
         })
+        section("СИСТЕМНЫЕ РАЗРЕШЕНИЯ")
         item("Точные будильники", if (ReminderScheduler.exactAllowed(this)) "Разрешены" else "Требуется разрешение") {
             if (Build.VERSION.SDK_INT >= 31) runCatching { startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:$packageName"))) }
         }
         item("Системные уведомления", "Настройки каналов") { startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName)) }
+        item("Фоновая работа", "Системные настройки приложения") { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))) }
+        section("ДИАГНОСТИКА")
         item("Тестовое уведомление", "Отправить сейчас") { actions.test(false) }
         item("Тест будильника", "Через 30 секунд") { actions.test(true) }
         item("Диагностика", "Запланированные напоминания") { DiagnosticsDialog.show(this) }
@@ -117,7 +126,6 @@ class SettingsActivity : Activity() {
             ReminderScheduler.request(this)
             android.widget.Toast.makeText(this, "Напоминания перепланированы", android.widget.Toast.LENGTH_SHORT).show()
         }
-        item("Фоновая работа", "Системные настройки приложения") { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))) }
         section("ОФОРМЛЕНИЕ")
         item("Масштаб текста", InterfaceSize.current(this).title) { chooseInterfaceSize() }
         section("ПРИЛОЖЕНИЕ")
@@ -127,6 +135,21 @@ class SettingsActivity : Activity() {
                 .setPositiveButton("GitHub") { _, _ -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(GitHubReleaseApi.RELEASES))) }
                 .setNegativeButton("Закрыть", null).show()
         }
+    }
+
+    private fun chooseEndLead() {
+        val options = EndReminderTiming.options
+        val current = EndReminderTiming.normalize(prefs(this).getInt("end_lead", 0))
+        AlertDialog.Builder(this)
+            .setTitle("Оповещение об окончании пары")
+            .setSingleChoiceItems(options.map { EndReminderTiming.label(it) }.toTypedArray(), options.indexOf(current)) { dialog, index ->
+                prefs(this).edit().putInt("end_lead", options[index]).apply()
+                dialog.dismiss()
+                ReminderScheduler.request(this)
+                render()
+            }
+            .setNegativeButton("Отмена", null)
+            .show()
     }
 
     private fun chooseInterfaceSize() {
