@@ -26,6 +26,29 @@ import ru.tltsu.schedule.update.GitHubReleaseApi
 
 class SettingsActivity : Activity() {
     private lateinit var body: LinearLayout
+    private var startLeadSubtitle: TextView? = null
+    private var endLeadSubtitle: TextView? = null
+    private val settingsListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        when (key) {
+            "lead" -> startLeadSubtitle?.text = startLeadLabel()
+            "end_lead" -> endLeadSubtitle?.text = endLeadLabel()
+        }
+    }
+
+    private fun startLeadLabel() = "За ${prefs(this).getInt("lead", 15)} мин."
+    private fun endLeadLabel() = EndReminderTiming.label(EndReminderTiming.normalize(prefs(this).getInt("end_lead", 0)))
+
+    override fun onStart() {
+        super.onStart()
+        prefs(this).registerOnSharedPreferenceChangeListener(settingsListener)
+        startLeadSubtitle?.text = startLeadLabel()
+        endLeadSubtitle?.text = endLeadLabel()
+    }
+
+    override fun onStop() {
+        prefs(this).unregisterOnSharedPreferenceChangeListener(settingsListener)
+        super.onStop()
+    }
     private var scroll: ScrollView? = null
     private val palette by lazy { AppPalette.current(this) }
     private val accent get() = palette.accent
@@ -90,7 +113,8 @@ class SettingsActivity : Activity() {
             AlertDialog.Builder(this).setMessage("Android выполняет фоновое обновление примерно раз в час при наличии сети.").setPositiveButton("OK", null).show()
         }
         section("НАПОМИНАНИЯ О ПАРАХ")
-        item("До начала пары", "За ${prefs(this).getInt("lead", 15)} мин.") { actions.chooseLead(prefs(this).getInt("lead", 15)) }
+        startLeadSubtitle = item("До начала пары", startLeadLabel()) { actions.chooseLead(prefs(this).getInt("lead", 15)) }
+        endLeadSubtitle = null
         body.addView(Switch(this).apply {
             text = "Уведомлять об окончании пары"
             setTextColor(palette.text)
@@ -106,7 +130,7 @@ class SettingsActivity : Activity() {
             }
         })
         if (prefs(this).getBoolean("notify_lesson_end", false)) {
-            item("Время оповещения об окончании", EndReminderTiming.label(EndReminderTiming.normalize(prefs(this).getInt("end_lead", 0)))) { chooseEndLead() }
+            endLeadSubtitle = item("Время оповещения об окончании", endLeadLabel()) { chooseEndLead() }
         }
         section("ИЗМЕНЕНИЯ РАСПИСАНИЯ")
         body.addView(Switch(this).apply {
@@ -158,7 +182,6 @@ class SettingsActivity : Activity() {
                 prefs(this).edit().putInt("end_lead", options[index]).apply()
                 dialog.dismiss()
                 ReminderScheduler.request(this)
-                render()
             }
             .setNegativeButton("Отмена", null)
             .show()
@@ -270,7 +293,7 @@ class SettingsActivity : Activity() {
         })
     }
 
-    private fun item(title: String, subtitle: String, action: () -> Unit) {
+    private fun item(title: String, subtitle: String, action: () -> Unit): TextView {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -279,7 +302,8 @@ class SettingsActivity : Activity() {
         }
         val text = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         text.addView(TextView(this).apply { this.text = title; textSize = 16f; setTextColor(palette.text) })
-        text.addView(TextView(this).apply { this.text = subtitle; textSize = 13f; setTextColor(muted) })
+        val subtitleView = TextView(this).apply { this.text = subtitle; textSize = 13f; setTextColor(muted) }
+        text.addView(subtitleView)
         row.addView(text, LinearLayout.LayoutParams(0, -2, 1f))
         row.addView(android.widget.ImageView(this).apply {
             setImageResource(ru.tltsu.schedule.R.drawable.ic_chevron_right)
@@ -288,5 +312,6 @@ class SettingsActivity : Activity() {
         }, LinearLayout.LayoutParams(dp(20), dp(20)).apply { marginStart = dp(8) })
         body.addView(row)
         body.addView(android.view.View(this).apply { setBackgroundColor(palette.border) }, LinearLayout.LayoutParams(-1, dp(1)))
+        return subtitleView
     }
 }
