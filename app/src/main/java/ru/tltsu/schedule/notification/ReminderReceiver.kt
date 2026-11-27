@@ -36,7 +36,7 @@ class ReminderReceiver : BroadcastReceiver() {
 
         val name = lesson?.name ?: intent.getStringExtra("name").orEmpty()
         val detail = intent.getStringExtra("detail").orEmpty()
-        val title = if (lesson != null) "Скоро пара · " + lesson.start + " · " + lesson.room else name
+        val title = if (lesson != null) (if (lesson.number > 0) "${lesson.number}-я пара · " else "Скоро пара · ") + lesson.start + " · " + lesson.room else name
         val compact = if (lesson != null) lesson.name else detail
         val expanded = if (lesson != null) listOf(lesson.name, lesson.time() + " · " + lesson.room, lesson.type, lesson.groups).filter { it.isNotBlank() }.joinToString("\n") else detail
         val sent = NotificationHelper.send(

@@ -200,13 +200,13 @@ internal class ScheduleScreen(
             setPadding(dp(14), dp(12), dp(14), dp(12))
         }
         val title = when {
-            lesson.begins() <= now -> "Сейчас идёт пара"
+            lesson.begins() <= now -> if (lesson.number > 0) "Сейчас идёт ${lesson.number}-я пара" else "Сейчас идёт пара"
             lesson.date == today() -> "Через " + duration((lesson.begins() - now + 59_999) / 60_000)
             lesson.date == today().plusDays(1) -> "Завтра в " + lesson.start
             else -> lesson.date.format(dayFmt) + " · " + lesson.start
         }
         if (lesson.begins() > now) {
-            banner.addView(label("БЛИЖАЙШАЯ ПАРА", 11f, accent, true))
+            banner.addView(label(if (lesson.number > 0) "БЛИЖАЙШАЯ ПАРА · №${lesson.number}" else "БЛИЖАЙШАЯ ПАРА", 11f, accent, true))
             banner.gap(4)
         }
         banner.addView(label(title, 18f, Color.WHITE, true))
@@ -227,6 +227,10 @@ internal class ScheduleScreen(
         }
         val line = if (compactLayout) column() else row().apply { gravity = Gravity.TOP }
         val times = column().apply { setPadding(0, dp(11), 0, 0) }
+        if (lesson.number > 0) {
+            times.addView(label("№${lesson.number}", 12f, accent, true))
+            times.gap(4)
+        }
         times.addView(label(lesson.start.toString(), 16f, Color.WHITE, true))
         times.gap(3)
         times.addView(label(lesson.end.toString(), 13f, muted))
@@ -241,7 +245,7 @@ internal class ScheduleScreen(
         card.addView(View(context).apply { background = rounded(typeColor, 3) }, LinearLayout.LayoutParams(dp(3), dp(44)).apply { marginEnd = dp(10) })
         val details = column()
         if (compactLayout) {
-            details.addView(label(lesson.time(), 14f, muted, true))
+            details.addView(label((if (lesson.number > 0) "${lesson.number}-я пара · " else "") + lesson.time(), 14f, muted, true))
             details.gap(4)
         }
         if (active) {
