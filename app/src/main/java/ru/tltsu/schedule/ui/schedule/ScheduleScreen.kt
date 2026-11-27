@@ -143,7 +143,7 @@ internal class ScheduleScreen(
             minHeight = dp(32)
             gravity = Gravity.CENTER_VERTICAL
             background = ripple(Color.TRANSPARENT, 8)
-            contentDescription = "Выбрать преподавателя: " + teacherName(context)
+            contentDescription = "Выбрать профиль: " + teacherName(context)
             setOnClickListener { onTeacher() }
         })
         val updated = ScheduleCache.updatedAt(context, id, monday)
@@ -292,6 +292,10 @@ internal class ScheduleScreen(
                 details.gap(3)
                 details.addView(label(lesson.groups, 13f, muted))
             }
+        }
+        if (teacher(context) < 0 && lesson.teacherName.isNotBlank()) {
+            details.gap(3)
+            details.addView(label(lesson.teacherName, 13f, muted))
         }
         if (lesson.note.isNotBlank()) {
             details.gap(4)

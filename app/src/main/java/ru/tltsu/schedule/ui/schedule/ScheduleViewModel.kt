@@ -39,8 +39,9 @@ internal class ScheduleViewModel(application: Application) : AndroidViewModel(ap
     }
 
     fun changeTeacher(id: Int) {
-        if (teacher(context) == id) return
-        prefs(context).edit().putInt("teacher_id", id).apply()
+        if (id == 0 || id == Int.MIN_VALUE) return
+        if (ru.tltsu.schedule.data.local.profileConfigured(context) && teacher(context) == id) return
+        ru.tltsu.schedule.data.local.saveProfile(context, id)
         generation++
         request?.cancel(true)
         context.getSystemService(NotificationManager::class.java).cancelAll()
@@ -50,7 +51,7 @@ internal class ScheduleViewModel(application: Application) : AndroidViewModel(ap
     }
 
     fun refresh(includeUpcoming: Boolean = false) {
-        if (current.loading) return
+        if (current.loading || !ru.tltsu.schedule.data.local.profileConfigured(context)) return
         val selectedWeek = week(current.date)
         val id = teacher(context)
         val token = ++generation

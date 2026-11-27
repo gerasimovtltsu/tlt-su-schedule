@@ -56,6 +56,7 @@ internal object ScheduleRepository {
     }
 
     fun upcoming(context: Context): List<Lesson> {
+        if (!ru.tltsu.schedule.data.local.profileConfigured(context)) return emptyList()
         val id = teacher(context)
         val monday = week(today())
         return cached(context, monday, id) + cached(context, monday.plusWeeks(1), id)

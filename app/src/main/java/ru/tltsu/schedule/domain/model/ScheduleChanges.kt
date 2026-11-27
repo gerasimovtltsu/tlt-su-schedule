@@ -17,6 +17,7 @@ internal object ScheduleChanges {
                 if (lesson.room != next.room) changes += "аудитория: ${lesson.room} → ${next.room}"
                 if (lesson.name != next.name) changes += "дисциплина: ${lesson.name} → ${next.name}"
                 if (lesson.groups != next.groups) changes += "группы: ${lesson.groups} → ${next.groups}"
+                if (lesson.teacherName != next.teacherName) changes += "преподаватель: ${lesson.teacherName} → ${next.teacherName}"
                 if (lesson.type != next.type) changes += "тип: ${lesson.type} → ${next.type}"
                 if (changes.isNotEmpty()) result += label(next) + " · " + changes.joinToString("; ")
             }

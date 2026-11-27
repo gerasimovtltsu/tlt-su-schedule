@@ -23,6 +23,7 @@ class SyncJob : JobService() {
 
     override fun onStartJob(params: JobParameters): Boolean {
         stopActive()
+        if (!ru.tltsu.schedule.data.local.profileConfigured(this)) return false
         val run = Run(params)
         active = run
         val context = applicationContext

@@ -15,7 +15,8 @@ data class Lesson(
     val end: LocalTime,
     val room: String,
     val groups: String,
-    val note: String
+    val note: String,
+    val teacherName: String = ""
 ) {
     fun begins(): Long = date.atTime(start).atZone(zone).toInstant().toEpochMilli()
     fun ends(): Long = date.atTime(end).atZone(zone).toInstant().toEpochMilli()

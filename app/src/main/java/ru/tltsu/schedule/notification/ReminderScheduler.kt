@@ -63,7 +63,9 @@ internal object ReminderScheduler {
         val manager = context.getSystemService(AlarmManager::class.java)
         val now = System.currentTimeMillis()
         val lead = storage.getInt("lead", 15)
+        val profile = ru.tltsu.schedule.data.local.profileKey(context)
         val upcoming = ScheduleRepository.upcoming(context)
+        if (profile != ru.tltsu.schedule.data.local.profileKey(context)) return
         val desired = upcoming
             .filter { it.begins() > now }
             .associateBy { it.id }
@@ -81,6 +83,7 @@ internal object ReminderScheduler {
                 .putExtra("name", lesson.name)
                 .putExtra("detail", lesson.time() + " · " + lesson.room + " · " + lesson.groups)
                 .putExtra("start", lesson.begins())
+                .putExtra("profile_key", profile)
             val pending = PendingIntent.getBroadcast(context, 0, reminder, FLAGS)
             try {
                 if (exactAllowed(context)) {
@@ -112,7 +115,8 @@ internal object ReminderScheduler {
             val reminder = endIntent(context, id)
                 .putExtra("end", endAt)
                 .putExtra("end_lead", endLead)
-                .putExtra("teacher_id", ru.tltsu.schedule.data.local.teacher(context))
+                .putExtra("teacher_id", profile)
+                .putExtra("profile_key", profile)
             val pending = PendingIntent.getBroadcast(context, 0, reminder, FLAGS)
             try {
                 if (exactAllowed(context)) {

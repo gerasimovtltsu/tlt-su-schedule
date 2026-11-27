@@ -60,19 +60,29 @@ class MainActivity : ComponentActivity() {
             dialogs::show, dialogs::chooseTeacher
         )
         model.state.observe(this) { screen.render(it) }
-        if (Build.VERSION.SDK_INT >= 33 &&
-            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
-        if (savedInstanceState == null) model.refresh(true)
-        UpdateManager.check(this, intent.getBooleanExtra("check_update", false))
+        if (!ru.tltsu.schedule.data.local.profileConfigured(this)) {
+            SettingsDialogs(this) { key ->
+                model.changeTeacher(key)
+                requestNotificationAccess()
+            }.chooseProfile(true)
+        } else {
+            requestNotificationAccess()
+            if (savedInstanceState == null) model.refresh(true)
+            UpdateManager.check(this, intent.getBooleanExtra("check_update", false))
+        }
+    }
+
+    private fun requestNotificationAccess() {
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
     }
 
     @Deprecated("Legacy activity result used for settings navigation")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == 208 && resultCode == RESULT_OK) {
-            val id = data?.getIntExtra("teacher_id", -1) ?: -1
-            if (id > 0) model.changeTeacher(id)
+            val id = data?.getIntExtra("profile_key", 0) ?: 0
+            if (id != 0 && id != Int.MIN_VALUE) model.changeTeacher(id)
         }
     }
 

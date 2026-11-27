@@ -6,11 +6,12 @@ import java.time.LocalDate
 import ru.tltsu.schedule.util.weekBounds
 
 internal object ScheduleApi {
-    private const val ENDPOINT = "https://its.tltsu.ru/api/schedule/teacher"
+    private const val ENDPOINT = "https://its.tltsu.ru/api/schedule"
 
     fun load(teacherId: Int, date: LocalDate): String {
         val (from, to) = weekBounds(date)
-        val url = URL("$ENDPOINT?teacherId=$teacherId&fromDate=$from&toDate=$to")
+        val profile = ru.tltsu.schedule.domain.model.ScheduleProfile.fromKey(teacherId)
+        val url = URL("$ENDPOINT/${profile.role.path}?${profile.role.parameter}=${profile.id}&fromDate=$from&toDate=$to")
         val connection = url.openConnection() as HttpURLConnection
         connection.connectTimeout = 12_000
         connection.readTimeout = 15_000

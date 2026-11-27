@@ -105,14 +105,13 @@ class SettingsActivity : Activity() {
         contentScroll.post { contentScroll.scrollTo(0, savedY) }
         setContentView(root)
         val actions = SettingsDialogs(this) { id ->
-            val p = prefs(this)
-            if (id != p.getInt("teacher_id", 15943)) {
-                setResult(RESULT_OK, Intent().putExtra("teacher_id", id))
+            if (id != ru.tltsu.schedule.data.local.profileKey(this)) {
+                setResult(RESULT_OK, Intent().putExtra("profile_key", id))
                 finish()
             }
         }
         section("РАСПИСАНИЕ")
-        item(R.drawable.ic_pref_teacher, "Преподаватель", teacherName(this)) { actions.chooseTeacher() }
+        item(R.drawable.ic_pref_teacher, "Профиль · " + if (ru.tltsu.schedule.data.local.profileKey(this) < 0) "Студент" else "Преподаватель", teacherName(this)) { actions.chooseTeacher() }
         item(R.drawable.ic_pref_sync, "Автообновление расписания", "Примерно каждый час") {
             AlertDialog.Builder(this).setMessage("Android выполняет фоновое обновление примерно раз в час при наличии сети.").setPositiveButton("OK", null).show()
         }
@@ -155,7 +154,7 @@ class SettingsActivity : Activity() {
         section("ПРИЛОЖЕНИЕ")
         item(R.drawable.ic_pref_update, "Проверить обновления", "Версия " + UpdateManager.installed(this)) { UpdateManager.check(this, true) }
         item(R.drawable.ic_pref_info, "О приложении", "Расписание ТГУ · GitHub") {
-            AlertDialog.Builder(this).setTitle("Расписание ТГУ").setMessage("Версия " + UpdateManager.installed(this) + "\nНеофициальное приложение для преподавателей ТГУ.\nНативный Android · Kotlin")
+            AlertDialog.Builder(this).setTitle("Расписание ТГУ").setMessage("Версия " + UpdateManager.installed(this) + "\nНеофициальное приложение для студентов и преподавателей ТГУ.\nНативный Android · Kotlin")
                 .setPositiveButton("GitHub") { _, _ -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(GitHubReleaseApi.RELEASES))) }
                 .setNegativeButton("Закрыть", null).show()
         }

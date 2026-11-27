@@ -26,6 +26,8 @@ class ReminderReceiver : BroadcastReceiver() {
             return
         }
         if (now >= start) return
+        if (!test && intent.hasExtra("profile_key") && intent.getIntExtra("profile_key", 0) != ru.tltsu.schedule.data.local.profileKey(context)) return
+        if (!test && !intent.hasExtra("profile_key") && ru.tltsu.schedule.data.local.profileKey(context) < 0) return
 
         val lesson = if (!test) {
             if (id == null) return
@@ -43,7 +45,7 @@ class ReminderReceiver : BroadcastReceiver() {
         val detail = intent.getStringExtra("detail").orEmpty()
         val title = if (lesson != null) (if (lesson.number > 0) "${lesson.number}-я пара · " else "Скоро пара · ") + lesson.start + " · " + lesson.room else name
         val compact = if (lesson != null) lesson.name else detail
-        val expanded = if (lesson != null) listOf(lesson.name, lesson.time() + " · " + lesson.room, lesson.type, lesson.groups).filter { it.isNotBlank() }.joinToString("\n") else detail
+        val expanded = if (lesson != null) listOf(lesson.name, lesson.time() + " · " + lesson.room, lesson.type, lesson.groups, lesson.teacherName).filter { it.isNotBlank() }.joinToString("\n") else detail
         val sent = NotificationHelper.send(
             context, intent.data.toString().hashCode(),
             title, compact, expanded
@@ -73,7 +75,7 @@ class ReminderReceiver : BroadcastReceiver() {
             val remaining = ((endAt - now + 59_999L) / 60_000L).coerceAtLeast(1L)
             "До конца пары $remaining мин. · ${lesson.end}"
         }
-        val expanded = listOf(lesson.name, lesson.time() + " · " + lesson.room, lesson.type, lesson.groups)
+        val expanded = listOf(lesson.name, lesson.time() + " · " + lesson.room, lesson.type, lesson.groups, lesson.teacherName)
             .filter { it.isNotBlank() }.joinToString("\n")
         if (NotificationHelper.send(context, intent.data.toString().hashCode(), title, lesson.name, expanded,
                 NotificationHelper.END_CHANNEL_ID)) {

@@ -22,32 +22,44 @@ internal class SettingsDialogs(
     private val activity: Activity,
     private val onTeacherChanged: (Int) -> Unit
 ) {
-    fun chooseTeacher() {
+    fun chooseTeacher() = chooseProfile(false)
+
+    fun chooseProfile(firstLaunch: Boolean) {
+        val configured = ru.tltsu.schedule.data.local.profileConfigured(activity)
+        val current = if (configured) ru.tltsu.schedule.domain.model.ScheduleProfile.fromKey(teacher(activity)) else null
+        val roles = ru.tltsu.schedule.domain.model.ProfileRole.values()
+        val picker = AlertDialog.Builder(activity)
+            .setTitle(if (firstLaunch) "Кто вы?" else "Выбор профиля")
+            .setItems(roles.map { it.title }.toTypedArray()) { _, index ->
+                enterProfile(roles[index], current, firstLaunch)
+            }
+        if (firstLaunch) picker.setCancelable(false) else picker.setNegativeButton("Отмена", null)
+        picker.show()
+    }
+
+    private fun enterProfile(role: ru.tltsu.schedule.domain.model.ProfileRole,
+        current: ru.tltsu.schedule.domain.model.ScheduleProfile?, firstLaunch: Boolean) {
         val input = EditText(activity).apply {
             inputType = InputType.TYPE_CLASS_TEXT
-            hint = "ID или ссылка на расписание"
-            setText(teacher(activity).toString())
-            selectAll()
+            hint = "ID или ссылка"
+            if (current?.role == role) setText(current.id.toString())
         }
+        val label = if (role == ru.tltsu.schedule.domain.model.ProfileRole.STUDENT) "группы" else "преподавателя"
         val dialog = AlertDialog.Builder(activity)
-            .setTitle("Преподаватель")
-            .setMessage("Введите числовой ID или ссылку rasp.tltsu.ru/teacher/…")
+            .setTitle("Расписание $label")
+            .setMessage("Введите ID $label или ссылку с официального сайта: rasp.tltsu.ru/" + role.path + "/…")
             .setView(input)
-            .setPositiveButton("Сохранить", null)
-            .setNegativeButton("Отмена", null)
+            .setPositiveButton("Продолжить", null)
+            .setNegativeButton("Назад") { _, _ -> chooseProfile(firstLaunch) }
+            .setCancelable(!firstLaunch)
             .create()
         dialog.setOnShowListener {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                val raw = input.text.toString().trim()
-                val uri = Uri.parse(raw)
-                val id = raw.toIntOrNull() ?: if (
-                    uri.host == "rasp.tltsu.ru" && uri.pathSegments.firstOrNull() == "teacher"
-                ) uri.pathSegments.getOrNull(1)?.toIntOrNull() else null
-                if (id == null || id <= 0) {
-                    input.error = "Введите корректный ID преподавателя"
-                } else {
-                    onTeacherChanged(id)
+                val profile = ru.tltsu.schedule.domain.model.ScheduleProfile.parse(role, input.text.toString())
+                if (profile == null) input.error = "Введите корректный ID или ссылку $label"
+                else {
                     dialog.dismiss()
+                    onTeacherChanged(profile.key)
                 }
             }
         }
